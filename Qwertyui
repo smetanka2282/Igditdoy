@@ -1,0 +1,161 @@
+import pygame
+import sys
+import random
+import os # Для корректной работы с путями к файлам
+
+# Инициализация Pygame
+pygame.init()
+
+# Настройки экрана
+SCREEN_WIDTH = 400
+SCREEN_HEIGHT = 600
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+clock = pygame.time.Clock()
+pygame.display.set_caption('Flappy Bird Textured')
+
+# Цвета (теперь используем только для текста)
+WHITE = (255, 255, 255)
+
+# Игровые переменные
+gravity = 0.25
+bird_movement = 0
+game_active = True
+score = 0
+
+# Шрифт
+font = pygame.font.SysFont('Arial', 32, bold=True)
+
+# -------------------------------------------------------------------
+# ЗАГРУЗКА ТЕКСТУР
+# base_path помогает найти файлы в той же папке, где лежит скрипт
+base_path = os.path.dirname(__file__)
+
+try:
+    # Загружаем фон и масштабируем под размер экрана
+    bg_surface = pygame.image.load(os.path.join(base_path, 'bg.png')).convert()
+    bg_surface = pygame.transform.scale(bg_surface, (SCREEN_WIDTH, SCREEN_HEIGHT))
+
+    # Загружаем птичку
+    bird_surface = pygame.image.load(os.path.join(base_path, 'bird.png')).convert_alpha()
+
+    # Загружаем трубы (высокие, чтобы они точно уходили за край)
+    pipe_top_surface = pygame.image.load(os.path.join(base_path, 'pipe_top.png')).convert_alpha()
+    pipe_top_surface = pygame.transform.scale(pipe_top_surface, (50, 400)) # Ширина 50
+
+    pipe_bottom_surface = pygame.image.load(os.path.join(base_path, 'pipe_bottom.png')).convert_alpha()
+    pipe_bottom_surface = pygame.transform.scale(pipe_bottom_surface, (50, 400)) # Ширина 50
+
+except pygame.error as e:
+    print("Ошибка загрузки текстур! Убедитесь, что bg.png, bird.png, pipe_top.png, pipe_bottom.png лежат в той же папке.")
+    print(f"Детали ошибки: {e}")
+    pygame.quit()
+    sys.exit()
+# -------------------------------------------------------------------
+
+# Птичка (используем размер загруженной картинки)
+bird_rect = bird_surface.get_rect(center=(50, 300))
+
+# Трубы
+pipe_list = []
+SPAWNPIPE = pygame.USEREVENT
+pygame.time.set_timer(SPAWNPIPE, 1500) # Чуть увеличили интервал для текстур
+# Теперь высота труб зависит от размера картинки трубы (400) и окна (600)
+# Разрыв между трубами сделаем фиксированным (например, 150 пикселей)
+PIPE_GAP = 150
+pipe_heights = [150, 250, 350] # Точки центра разрыва
+
+def create_pipe():
+    # Выбираем случайную высоту центра разрыва
+    gap_y = random.choice(pipe_heights)
+    
+    # Нижняя труба: верхний край картинки начинается у gap_y + gap/2
+    bottom_pipe = pipe_bottom_surface.get_rect(midtop=(450, gap_y + PIPE_GAP // 2))
+    
+    # Верхняя труба: нижний край картинки заканчивается у gap_y - gap/2
+    top_pipe = pipe_top_surface.get_rect(midbottom=(450, gap_y - PIPE_GAP // 2))
+    
+    return bottom_pipe, top_pipe
+
+def move_pipes(pipes):
+    for pipe in pipes:
+        pipe.centerx -= 4 # Чуть медленнее для текстурированной версии
+    return [pipe for pipe in pipes if pipe.right > -50]
+
+# Обновленная функция отрисовки текстур труб
+def draw_pipes(pipes):
+    for i in range(len(pipes)):
+        pipe_rect = pipes[i]
+        # Мы знаем, что create_pipe возвращает (bottom, top).
+        # Значит, в списке они идут: index0=bot, index1=top, index2=bot...
+        # Четный индекс - нижняя труба, нечетный - верхняя.
+        if i % 2 == 0:
+            screen.blit(pipe_bottom_surface, pipe_rect)
+        else:
+            screen.blit(pipe_top_surface, pipe_rect)
+
+def check_collision(pipes):
+    for pipe in pipes:
+        if bird_rect.colliderect(pipe):
+            return False
+    if bird_rect.top <= -50 or bird_rect.bottom >= 650:
+        return False
+    return True
+
+def display_score():
+    score_surface = font.render(f'Score: {int(score)}', True, WHITE)
+    score_rect = score_surface.get_rect(center=(200, 50))
+    screen.blit(score_surface, score_rect)
+
+# Основной игровой цикл
+while True:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+        
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE and game_active:
+                bird_movement = 0
+                bird_movement -= 7 # Сила прыжка
+            if event.key == pygame.K_SPACE and not game_active:
+                # Перезапуск
+                game_active = True
+                pipe_list.clear()
+                bird_rect.center = (50, 300)
+                bird_movement = 0
+                score = 0
+
+        if event.type == SPAWNPIPE:
+            pipe_list.extend(create_pipe())
+
+    # Отрисовка фона вместо заливки цветом
+    screen.blit(bg_surface, (0, 0))
+
+    if game_active:
+        # Физика птички
+        bird_movement += gravity
+        bird_rect.centery += bird_movement
+        
+        # Отрисовка текстуры птички по её прямоугольнику
+        screen.blit(bird_surface, bird_rect)
+        
+        # Трубы
+        pipe_list = move_pipes(pipe_list)
+        draw_pipes(pipe_list)
+        
+        # Проверка столкновений
+        game_active = check_collision(pipe_list)
+        
+        # Счет
+        score += 0.01
+        display_score()
+    else:
+        # Экран проигрыша
+        over_surface = font.render('GAME OVER! Press SPACE', True, WHITE)
+        over_rect = over_surface.get_rect(center=(200, 300))
+        screen.blit(over_surface, over_rect)
+        display_score()
+
+    pygame.display.update()
+    clock.tick(60) # 60 кадров в секунду
+
