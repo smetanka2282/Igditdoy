@@ -3,15 +3,15 @@ import sys
 import random
 import os
 
-# Инициализация звука и графики
+# 1. Инициализация
 pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=512)
 pygame.init()
 
-# Настройки окна
+# Настройки экрана
 SCREEN_WIDTH, SCREEN_HEIGHT = 400, 600
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 clock = pygame.time.Clock()
-pygame.display.set_caption('Flappy Bird: Minimalist Edition')
+pygame.display.set_caption('Flappy Bird: Failsafe Version')
 
 # Переменные
 gravity = 0.25
@@ -22,28 +22,39 @@ high_score = 0
 WHITE = (255, 255, 255)
 font = pygame.font.SysFont('Arial', 32, bold=True)
 
-# Путь к файлам
-base_path = os.path.dirname(__file__)
+# Определяем путь к папке (учитываем русские буквы в пути)
+base_path = os.path.dirname(os.path.abspath(__file__))
+print(f"--- ПРОВЕРКА: Я ищу файлы в папке: {base_path} ---")
+
+# --- ФУНКЦИЯ-ПОМОЩНИК ДЛЯ ЗАГРУЗКИ ---
+def get_image(name, size, fallback_color):
+    path = os.path.join(base_path, name)
+    if os.path.exists(path):
+        img = pygame.image.load(path).convert_alpha()
+        return pygame.transform.scale(img, size)
+    else:
+        print(f"ВНИМАНИЕ: Файл {name} не найден! Создаю цветной квадрат.")
+        surf = pygame.Surface(size)
+        surf.fill(fallback_color)
+        return surf
+
+def get_sound(name):
+    path = os.path.join(base_path, name)
+    if os.path.exists(path):
+        return pygame.mixer.Sound(path)
+    else:
+        print(f"ВНИМАНИЕ: Звук {name} не найден!")
+        return None
 
 # --- ЗАГРУЗКА РЕСУРСОВ ---
-try:
-    # Текстуры
-    bg_surface = pygame.image.load(os.path.join(base_path, 'bg.png')).convert()
-    bg_surface = pygame.transform.scale(bg_surface, (SCREEN_WIDTH, SCREEN_HEIGHT))
-    
-    bird_surface = pygame.image.load(os.path.join(base_path, 'bird.png')).convert_alpha()
-    bird_rect = bird_surface.get_rect(center=(50, 300))
-    
-    pipe_surface = pygame.image.load(os.path.join(base_path, 'pipe_bottom.png')).convert_alpha()
-    pipe_bottom = pygame.transform.scale(pipe_surface, (60, 450))
-    pipe_top = pygame.transform.flip(pipe_bottom, False, True)
-    
-    # Только один звук — звук очка/пролёта
-    score_sound = pygame.mixer.Sound(os.path.join(base_path, 'score.wav'))
-except Exception as e:
-    print(f"Ошибка: проверь наличие файлов bg.png, bird.png, pipe_bottom.png и score.wav\n{e}")
-    pygame.quit()
-    sys.exit()
+# Если файлов нет, птичка будет желтой, трубы зелеными, а фон голубым
+bg_surface = get_image('bg.png', (SCREEN_WIDTH, SCREEN_HEIGHT), (113, 197, 207))
+bird_surface = get_image('bird.png', (34, 24), (255, 255, 0))
+pipe_bottom = get_image('pipe_bottom.png', (60, 450), (0, 200, 0))
+pipe_top = pygame.transform.flip(pipe_bottom, False, True)
+score_sound = get_sound('score.wav')
+
+bird_rect = bird_surface.get_rect(center=(50, 300))
 
 # --- ЛОГИКА ТРУБ ---
 pipe_list = []
@@ -51,23 +62,12 @@ SPAWNPIPE = pygame.USEREVENT
 pygame.time.set_timer(SPAWNPIPE, 1400)
 
 def create_pipe():
-    random_pos = random.choice([200, 300, 400])
-    gap = 160 # Размер прохода
-    bottom_p = pipe_bottom.get_rect(midtop=(500, random_pos + gap//2))
-    top_p = pipe_top.get_rect(midbottom=(500, random_pos - gap//2))
-    return bottom_p, top_p
-
-def move_pipes(pipes):
-    for pipe in pipes:
-        pipe.centerx -= 4
-    return [pipe for pipe in pipes if pipe.right > -50]
-
-def draw_pipes(pipes):
-    for pipe in pipes:
-        if pipe.bottom >= SCREEN_HEIGHT:
-            screen.blit(pipe_bottom, pipe)
-        else:
-            screen.blit(pipe_top, pipe)
+    pos = random.choice([200, 300, 400])
+    gap = 160
+    return [
+        pipe_bottom.get_rect(midtop=(500, pos + gap//2)),
+        pipe_top.get_rect(midbottom=(500, pos - gap//2))
+    ]
 
 # --- ГЛАВНЫЙ ЦИКЛ ---
 while True:
@@ -75,59 +75,49 @@ while True:
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
-        
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                if game_active:
-                    bird_movement = 0
-                    bird_movement -= 7
-                else:
-                    # Рестарт игры
-                    game_active, score = True, 0
-                    pipe_list.clear()
-                    bird_rect.center, bird_movement = (50, 300), 0
-
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+            if game_active:
+                bird_movement = -7
+            else:
+                game_active, score, bird_movement = True, 0, 0
+                pipe_list.clear()
+                bird_rect.center = (50, 300)
         if event.type == SPAWNPIPE and game_active:
             pipe_list.extend(create_pipe())
 
-    # Фон всегда на заднем плане
     screen.blit(bg_surface, (0, 0))
 
     if game_active:
-        # Птица
         bird_movement += gravity
         bird_rect.centery += bird_movement
         screen.blit(bird_surface, bird_rect)
         
         # Трубы
-        pipe_list = move_pipes(pipe_list)
-        draw_pipes(pipe_list)
+        for pipe in pipe_list:
+            pipe.centerx -= 4
+            if pipe.bottom >= SCREEN_HEIGHT: screen.blit(pipe_bottom, pipe)
+            else: screen.blit(pipe_top, pipe)
+        
+        pipe_list = [p for p in pipe_list if p.right > -50]
         
         # Столкновения
         for pipe in pipe_list:
-            if bird_rect.colliderect(pipe):
-                game_active = False
-        if bird_rect.top <= -50 or bird_rect.bottom >= 600:
-            game_active = False
+            if bird_rect.colliderect(pipe): game_active = False
+        if bird_rect.top <= -50 or bird_rect.bottom >= 600: game_active = False
             
-        # Счёт и Звук пролёта
+        # Счёт
         for pipe in pipe_list:
             if 48 < pipe.centerx < 52:
                 score += 0.5
-                if score % 1 == 0:
-                    score_sound.play() # ВОТ ОН, ТОТ САМЫЙ ЗВУК
+                if score % 1 == 0 and score_sound: score_sound.play()
         
-        # Отображение счёта
         score_surf = font.render(str(int(score)), True, WHITE)
         screen.blit(score_surf, (190, 50))
     else:
-        # Экран проигрыша / ожидания
         if score > high_score: high_score = score
-        res_surf = font.render(f'BEST: {int(high_score)}', True, WHITE)
+        txt = f'BEST: {int(high_score)}' if score > 0 else 'PRESS SPACE'
+        res_surf = font.render(txt, True, WHITE)
         screen.blit(res_surf, res_surf.get_rect(center=(200, 300)))
-        msg = font.render('PRESS SPACE', True, WHITE)
-        screen.blit(msg, msg.get_rect(center=(200, 450)))
 
     pygame.display.update()
     clock.tick(60)
-
