@@ -1,9 +1,10 @@
- import pygame
+import pygame
 import sys
 import random
 import os
 
-# Инициализация
+# 1. Настройка звукового буфера (чтобы звук не опаздывал)
+pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=512)
 pygame.init()
 
 # Настройки экрана
@@ -11,38 +12,49 @@ SCREEN_WIDTH = 400
 SCREEN_HEIGHT = 600
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 clock = pygame.time.Clock()
-pygame.display.set_caption('Flappy Bird: High Score Edition')
+pygame.display.set_caption('Flappy Bird: Full Version')
 
-# Цвета и шрифты
+# Переменные и шрифты
 WHITE = (255, 255, 255)
 font = pygame.font.SysFont('Arial', 35, bold=True)
-small_font = pygame.font.SysFont('Arial', 24, bold=True)
-
-# Игровые переменные
+small_font = pygame.font.SysFont('Arial', 22, bold=True)
 gravity = 0.25
 bird_movement = 0
-game_active = False # Начинаем с экрана ожидания
+game_active = False
 score = 0
 high_score = 0
 
-# Загрузка текстур
+# Путь к папке со скриптом
 base_path = os.path.dirname(__file__)
-try:
-    bg_surface = pygame.image.load(os.path.join(base_path, 'bg.png')).convert()
-    bg_surface = pygame.transform.scale(bg_surface, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
-    bird_surface = pygame.image.load(os.path.join(base_path, 'bird.png')).convert_alpha()
-    bird_rect = bird_surface.get_rect(center=(50, 300))
+# --- ЗАГРУЗКА РЕСУРСОВ ---
+def load_assets():
+    try:
+        # Текстуры
+        bg = pygame.image.load(os.path.join(base_path, 'bg.png')).convert()
+        bg = pygame.transform.scale(bg, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        
+        bird = pygame.image.load(os.path.join(base_path, 'bird.png')).convert_alpha()
+        
+        p_bottom = pygame.image.load(os.path.join(base_path, 'pipe_bottom.png')).convert_alpha()
+        p_bottom = pygame.transform.scale(p_bottom, (60, 450))
+        p_top = pygame.transform.flip(p_bottom, False, True)
+        
+        # Звуки
+        s_flap = pygame.mixer.Sound(os.path.join(base_path, 'flap.wav'))
+        s_hit = pygame.mixer.Sound(os.path.join(base_path, 'hit.wav'))
+        s_score = pygame.mixer.Sound(os.path.join(base_path, 'point.wav'))
+        
+        return bg, bird, p_bottom, p_top, s_flap, s_hit, s_score
+    except Exception as e:
+        print(f"Ошибка загрузки файлов: {e}")
+        pygame.quit()
+        sys.exit()
 
-    pipe_surface = pygame.image.load(os.path.join(base_path, 'pipe_bottom.png')).convert_alpha()
-    pipe_bottom_surface = pygame.transform.scale(pipe_surface, (60, 450))
-    pipe_top_surface = pygame.transform.flip(pipe_bottom_surface, False, True)
-except:
-    print("Ошибка: Картинки не найдены!")
-    pygame.quit()
-    sys.exit()
+bg_surface, bird_surface, pipe_bottom, pipe_top, flap_sound, hit_sound, score_sound = load_assets()
+bird_rect = bird_surface.get_rect(center=(50, 300))
 
-# Трубы
+# --- ЛОГИКА ТРУБ ---
 pipe_list = []
 SPAWNPIPE = pygame.USEREVENT
 pygame.time.set_timer(SPAWNPIPE, 1400)
@@ -50,9 +62,9 @@ pipe_heights = [200, 300, 400]
 
 def create_pipe():
     random_pos = random.choice(pipe_heights)
-    bottom_pipe = pipe_bottom_surface.get_rect(midtop=(500, random_pos + 75))
-    top_pipe = pipe_top_surface.get_rect(midbottom=(500, random_pos - 75))
-    return bottom_pipe, top_pipe
+    bottom_p = pipe_bottom.get_rect(midtop=(500, random_pos + 80))
+    top_p = pipe_top.get_rect(midbottom=(500, random_pos - 80))
+    return bottom_p, top_p
 
 def move_pipes(pipes):
     for pipe in pipes:
@@ -61,45 +73,41 @@ def move_pipes(pipes):
 
 def draw_pipes(pipes):
     for pipe in pipes:
-        if pipe.bottom >= 600: # Нижняя труба
-            screen.blit(pipe_bottom_surface, pipe)
-        else: # Верхняя труба
-            screen.blit(pipe_top_surface, pipe)
+        if pipe.bottom >= 600:
+            screen.blit(pipe_bottom, pipe)
+        else:
+            screen.blit(pipe_top, pipe)
 
+# --- ПРОВЕРКИ ---
 def check_collision(pipes):
     for pipe in pipes:
         if bird_rect.colliderect(pipe):
+            hit_sound.play()
             return False
     if bird_rect.top <= -50 or bird_rect.bottom >= 600:
+        hit_sound.play()
         return False
     return True
 
 def update_score(pipes):
     global score
     for pipe in pipes:
-        # Если центр птицы прошел через центр трубы (с небольшим запасом)
         if 48 < pipe.centerx < 52:
-            score += 0.5 # Прибавляем 0.5, так как в списке 2 трубы (верх и низ)
-    return int(score)
+            score += 0.5
+            if score % 1 == 0:
+                score_sound.play()
 
 def display_score(status):
     if status == 'playing':
-        score_surf = font.render(str(int(score)), True, WHITE)
-        score_rect = score_surf.get_rect(center=(200, 50))
-        screen.blit(score_surf, score_rect)
-    
-    if status == 'game_over':
-        # Текущий счет
-        score_surf = font.render(f'Score: {int(score)}', True, WHITE)
-        score_rect = score_surf.get_rect(center=(200, 180))
-        screen.blit(score_surf, score_rect)
-        
-        # Рекорд
-        high_score_surf = font.render(f'Best: {int(high_score)}', True, WHITE)
-        high_score_rect = high_score_surf.get_rect(center=(200, 240))
-        screen.blit(high_score_surf, high_score_rect)
+        surf = font.render(str(int(score)), True, WHITE)
+        screen.blit(surf, surf.get_rect(center=(200, 50)))
+    else:
+        s_surf = font.render(f'SCORE: {int(score)}', True, WHITE)
+        screen.blit(s_surf, s_surf.get_rect(center=(200, 180)))
+        h_surf = font.render(f'BEST: {int(high_score)}', True, WHITE)
+        screen.blit(h_surf, h_surf.get_rect(center=(200, 250)))
 
-# Игровой цикл
+# --- ГЛАВНЫЙ ЦИКЛ ---
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -111,7 +119,9 @@ while True:
                 if game_active:
                     bird_movement = 0
                     bird_movement -= 7
-                else: # Перезапуск игры
+                    flap_sound.play()
+                else:
+                    # Рестарт
                     game_active = True
                     pipe_list.clear()
                     bird_rect.center = (50, 300)
@@ -121,7 +131,7 @@ while True:
         if event.type == SPAWNPIPE and game_active:
             pipe_list.extend(create_pipe())
 
-    # Фон
+    # Отрисовка
     screen.blit(bg_surface, (0, 0))
 
     if game_active:
@@ -134,22 +144,17 @@ while True:
         pipe_list = move_pipes(pipe_list)
         draw_pipes(pipe_list)
         
-        # Столкновения и счет
+        # Состояние
         game_active = check_collision(pipe_list)
         update_score(pipe_list)
         display_score('playing')
     else:
-        # ЭКРАН ПОРАЖЕНИЯ / НАЧАЛА
-        if score > high_score:
-            high_score = score
-            
+        if score > high_score: high_score = score
         display_score('game_over')
         
-        # Текст-подсказка
         msg = "PRESS SPACE TO START" if score == 0 else "GAME OVER! SPACE TO RESTART"
         msg_surf = small_font.render(msg, True, WHITE)
-        msg_rect = msg_surf.get_rect(center=(200, 450))
-        screen.blit(msg_surf, msg_rect)
+        screen.blit(msg_surf, msg_surf.get_rect(center=(200, 450)))
 
     pygame.display.update()
     clock.tick(60)
