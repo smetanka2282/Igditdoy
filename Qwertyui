@@ -1,123 +1,139 @@
 import pygame
-import sys
 import random
-import os
+import sys
 
-# Настройка путей (учитывая твою структуру папок)
-# Мы поднимаемся на уровень выше из папки с кодом и заходим в assets/img
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-IMAGE_PATH = os.path.join(BASE_DIR, 'assets', 'img', 'bird.png')
-
-# Инициализация Pygame
+# --- Инициализация игры ---
 pygame.init()
 
-# Константы
-SCREEN_WIDTH = 400
-SCREEN_HEIGHT = 600
-GRAVITY = 0.25
-BIRD_JUMP = -6
-PIPE_SPEED = 3
-WHITE = (255, 255, 255)
-SKY_BLUE = (113, 197, 207)
-
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+# Настройки окна
+WIDTH = 400
+HEIGHT = 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Flappy Bird - 9А Яковлев Матвей")
 clock = pygame.time.Clock()
-font = pygame.font.SysFont("Arial", 32)
 
-# Загрузка изображения птички
-try:
-    bird_surface = pygame.image.load(IMAGE_PATH).convert_alpha()
-    bird_surface = pygame.transform.scale(bird_surface, (45, 35)) # Подгоняем размер
-except FileNotFoundError:
-    print(f"Не удалось найти файл по пути: {IMAGE_PATH}")
-    # Создаем временный квадрат, если картинка не найдена
-    bird_surface = pygame.Surface((40, 30))
-    bird_surface.fill((255, 200, 0))
+# Шрифты для текста
+game_font = pygame.font.SysFont("arial", 28, bold=True)
 
-bird_rect = bird_surface.get_rect(center = (100, SCREEN_HEIGHT // 2))
-
-# Переменные игры
+# Физика и переменные игры
+gravity = 0.25
 bird_movement = 0
+game_active = False
 score = 0
-game_active = True
 
-# Трубы
+# --- Загрузка графики ---
+# Используем абсолютный путь к картинке из твоей структуры папок
+BIRD_PATH = r"C:\игра 9А Яковлев Матвей\assets\img\bird.png"
+
+try:
+    # Пытаемся загрузить картинку птички
+    bird_surface = pygame.image.load(BIRD_PATH).convert_alpha()
+    # Подгоняем размер картинки, чтобы она не была слишком большой (40x30 пикселей)
+    bird_surface = pygame.transform.scale(bird_surface, (40, 30))
+except FileNotFoundError:
+    # Если картинка не найдена (например, ошибка в названии), рисуем желтый квадрат как замену
+    print(f"ВНИМАНИЕ: Картинка не найдена по пути {BIRD_PATH}.")
+    bird_surface = pygame.Surface((40, 30))
+    bird_surface.fill((255, 255, 0))
+
+# Создаем хитбокс (прямоугольник) для птички
+bird_rect = bird_surface.get_rect(center=(100, HEIGHT // 2))
+
+# Настройки препятствий (Труб)
+pipe_surface = pygame.Surface((60, HEIGHT))
+pipe_surface.fill((34, 139, 34)) # Зеленый цвет труб
 pipe_list = []
 SPAWNPIPE = pygame.USEREVENT
-pygame.time.set_timer(SPAWNPIPE, 1200)
+pygame.time.set_timer(SPAWNPIPE, 1500) # Новая труба появляется каждые 1.5 секунды
+pipe_heights = [200, 300, 400, 450] # Возможные высоты нижних труб
 
 def create_pipe():
-    random_pipe_pos = random.randint(200, 500)
-    bottom_pipe = bird_surface.get_rect(midtop = (500, random_pipe_pos)) # Используем rect для логики
-    # Для простоты рисуем трубы программно, так как картинок для них нет в ТЗ
-    return bottom_pipe
+    """Функция создания пары труб (нижняя и верхняя)"""
+    random_pipe_pos = random.choice(pipe_heights)
+    bottom_pipe = pipe_surface.get_rect(midtop=(WIDTH + 50, random_pipe_pos))
+    # Зазор между трубами = 150 пикселей
+    top_pipe = pipe_surface.get_rect(midbottom=(WIDTH + 50, random_pipe_pos - 160)) 
+    return bottom_pipe, top_pipe
 
 def move_pipes(pipes):
+    """Движение труб влево"""
     for pipe in pipes:
-        pipe.centerx -= PIPE_SPEED
-    return [pipe for pipe in pipes if pipe.right > 0]
+        pipe.centerx -= 3
+    # Удаляем трубы, которые ушли за экран, чтобы не перегружать память
+    return [pipe for pipe in pipes if pipe.right > -50]
 
 def draw_pipes(pipes):
+    """Отрисовка труб на экране"""
     for pipe in pipes:
-        # Рисуем нижнюю трубу
-        pygame.draw.rect(screen, (75, 180, 70), pipe)
-        # Рисуем верхнюю трубу (с просветом 150 пикселей)
-        top_pipe_rect = pygame.Rect(pipe.left, pipe.top - 150 - 500, 50, 500)
-        pygame.draw.rect(screen, (75, 180, 70), top_pipe_rect)
+        screen.blit(pipe_surface, pipe)
 
 def check_collision(pipes):
+    """Проверка столкновений птички с трубами, полом или потолком"""
     for pipe in pipes:
-        if bird_rect.colliderect(pipe) or bird_rect.colliderect(pygame.Rect(pipe.left, pipe.top - 150 - 500, 50, 500)):
-            return False
-    if bird_rect.top <= -100 or bird_rect.bottom >= SCREEN_HEIGHT:
+        if bird_rect.colliderect(pipe):
+            return False # Столкнулись с трубой
+    # Проверка вылета за верхний или нижний край экрана
+    if bird_rect.top <= -50 or bird_rect.bottom >= HEIGHT:
         return False
     return True
 
-# Главный цикл игры
+# --- Главный игровой цикл ---
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
         
+        # Управление на клавишу ПРОБЕЛ
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_SPACE and game_active:
                 bird_movement = 0
-                bird_movement += BIRD_JUMP
+                bird_movement -= 6 # Сила прыжка
             
+            # Перезапуск игры
             if event.key == pygame.K_SPACE and not game_active:
-                # Рестарт игры
                 game_active = True
-                pipe_list.clear()
-                bird_rect.center = (100, SCREEN_HEIGHT // 2)
+                pipe_list.clear() # Очищаем старые трубы
+                bird_rect.center = (100, HEIGHT // 2) # Возвращаем птичку в центр
                 bird_movement = 0
                 score = 0
 
-        if event.type == SPAWNPIPE:
-            pipe_list.append(create_pipe())
+        # Появление новых труб
+        if event.type == SPAWNPIPE and game_active:
+            pipe_list.extend(create_pipe())
 
-    screen.fill(SKY_BLUE)
+    # Заливка фона (Голубое небо)
+    screen.fill((135, 206, 235))
 
     if game_active:
-        # Птица
-        bird_movement += GRAVITY
-        bird_rect.centery += bird_movement
+        # Падение птички (гравитация)
+        bird_movement += gravity
+        bird_rect.centery += int(bird_movement)
         screen.blit(bird_surface, bird_rect)
         
-        # Трубы
+        # Проверка на проигрыш
+        game_active = check_collision(pipe_list)
+
+        # Отрисовка труб
         pipe_list = move_pipes(pipe_list)
         draw_pipes(pipe_list)
         
-        # Проверка столкновений
-        game_active = check_collision(pipe_list)
-        
-        # Счет (упрощенно: за каждую выжившую итерацию, деленную на FPS)
-        score += 0.01
-        score_surface = font.render(f'Score: {int(score)}', True, WHITE)
-        screen.blit(score_surface, (10, 10))
+        # Начисление очков (прибавляются пока летишь)
+        score += 0.01 
+        score_text = game_font.render(f"Счет: {int(score)}", True, (255, 255, 255))
+        screen.blit(score_text, (10, 10))
     else:
-        msg = font.render("GAME OVER (Space to Restart)", True, (200, 0, 0))
-        screen.blit(msg, (30, SCREEN_HEIGHT // 2))
+        # Экран проигрыша / старта
+        game_over_text1 = game_font.render("FLAPPY BIRD", True, (255, 255, 0))
+        game_over_text2 = game_font.render("Нажми ПРОБЕЛ для старта", True, (255, 255, 255))
+        screen.blit(game_over_text1, game_over_text1.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 30)))
+        screen.blit(game_over_text2, game_over_text2.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 20)))
+        
+        if score > 0:
+            score_res = game_font.render(f"Твой счет: {int(score)}", True, (255, 100, 100))
+            screen.blit(score_res, score_res.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 70)))
 
+    # Обновление экрана
     pygame.display.update()
-    clock.tick(60)
+    # Ограничение до 120 кадров в секунду
+    clock.tick(120)
