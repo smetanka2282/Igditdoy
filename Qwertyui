@@ -3,154 +3,131 @@ import sys
 import random
 import os
 
-# --- Настройка путей (Критически важно для IDLE) ---
-# Этот блок заставляет Python смотреть именно в ту папку, где сохранен файл .py
-script_dir = os.path.dirname(os.path.abspath(__file__))
-os.chdir(script_dir) 
-
 # --- Инициализация ---
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
 
-SCREEN_WIDTH = 400
-SCREEN_HEIGHT = 600
+SCREEN_WIDTH, SCREEN_HEIGHT = 400, 600
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 clock = pygame.time.Clock()
-pygame.display.set_caption('Flappy Bird Final')
+pygame.display.set_caption('Flappy Bird 3.9 Edition')
 
-# Цвета и шрифты
+# Константы
 WHITE = (255, 255, 255)
-font = pygame.font.SysFont('Arial', 40, bold=True)
-small_font = pygame.font.SysFont('Arial', 24, bold=True)
+RED = (255, 0, 0)
+GRAVITY = 0.25
+FLAP_STRENGTH = -6.5
 
-# Игровые переменные
-gravity = 0.25
+font = pygame.font.SysFont('Arial', 40, bold=True)
+small_font = pygame.font.SysFont('Arial', 20)
+
+base_path = os.path.dirname(os.path.abspath(__file__))
+
+def load_asset(name, size, fallback_color):
+    path = os.path.join(base_path, name)
+    try:
+        return pygame.transform.scale(pygame.image.load(path).convert_alpha(), size)
+    except Exception:
+        surf = pygame.Surface(size)
+        surf.fill(fallback_color)
+        return surf
+
+# Загрузка
+bg_surface = load_asset('bg.png', (SCREEN_WIDTH, SCREEN_HEIGHT), (113, 197, 207))
+bird_surface = load_asset('bird.png', (34, 24), (255, 255, 0))
+pipe_surface = load_asset('pipe_bottom.png', (60, 450), (0, 200, 0))
+pipe_top_surface = pygame.transform.flip(pipe_surface, False, True)
+
+try:
+    score_sound = pygame.mixer.Sound(os.path.join(base_path, 'score.wav'))
+except:
+    score_sound = None
+
+# Состояние игры
+bird_rect = bird_surface.get_rect(center=(50, 300))
 bird_movement = 0
 game_active = False
 score = 0
 high_score = 0
-
-# --- ЗАГРУЗКА РЕСУРСОВ ---
-# Мы используем try-except, чтобы игра не вылетала, если что-то пойдет не так
-try:
-    bg_surface = pygame.image.load('bg.png').convert()
-    bg_surface = pygame.transform.scale(bg_surface, (SCREEN_WIDTH, SCREEN_HEIGHT))
-
-    bird_surface = pygame.image.load('bird.png').convert_alpha()
-    bird_rect = bird_surface.get_rect(center=(100, 300))
-
-    pipe_surface = pygame.image.load('pipe_bottom.png').convert_alpha()
-    pipe_bottom = pygame.transform.scale(pipe_surface, (60, 450))
-    pipe_top = pygame.transform.flip(pipe_bottom, False, True)
-
-    score_sound = pygame.mixer.Sound('score.wav')
-except Exception as e:
-    print(f"Ошибка при загрузке: {e}")
-    # Если файлов нет, создаем цветные заглушки, чтобы код работал в любом случае
-    bg_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    bg_surface.fill((113, 197, 207))
-    bird_surface = pygame.Surface((34, 24))
-    bird_surface.fill((255, 255, 0))
-    bird_rect = bird_surface.get_rect(center=(100, 300))
-    pipe_bottom = pygame.Surface((60, 450))
-    pipe_bottom.fill((0, 200, 0))
-    pipe_top = pygame.transform.flip(pipe_bottom, False, True)
-    score_sound = None
-
-# --- ЛОГИКА ТРУБ ---
 pipe_list = []
+
 SPAWNPIPE = pygame.USEREVENT
-pygame.time.set_timer(SPAWNPIPE, 1200)
+pygame.time.set_timer(SPAWNPIPE, 1500)
 
 def create_pipe():
-    random_pipe_pos = random.choice([200, 300, 400])
-    gap = 160
-    # Создаем словари для труб, чтобы хранить их прямоугольник и статус "пройдено"
-    bottom_pipe = {'rect': pipe_bottom.get_rect(midtop=(500, random_pipe_pos + gap/2)), 'passed': False}
-    top_pipe = {'rect': pipe_top.get_rect(midbottom=(500, random_pipe_pos - gap/2)), 'passed': False}
-    return bottom_pipe, top_pipe
+    pos = random.choice([200, 300, 400])
+    gap = 150
+    bottom = pipe_surface.get_rect(midtop=(450, pos + gap//2))
+    top = pipe_top_surface.get_rect(midbottom=(450, pos - gap//2))
+    return {"rect": bottom, "passed": False}, {"rect": top, "passed": False}
 
-# --- ИГРОВОЙ ЦИКЛ ---
+# Цикл
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
         
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                if game_active:
-                    bird_movement = 0
-                    bird_movement -= 7
-                else:
-                    # Рестарт игры
-                    game_active = True
-                    pipe_list.clear()
-                    bird_rect.center = (100, 300)
-                    bird_movement = 0
-                    score = 0
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+            if game_active:
+                bird_movement = FLAP_STRENGTH
+            else:
+                game_active = True
+                pipe_list.clear()
+                bird_rect.center = (50, 300)
+                bird_movement = 0
+                score = 0
 
         if event.type == SPAWNPIPE and game_active:
             pipe_list.extend(create_pipe())
 
-    # Отрисовка фона
     screen.blit(bg_surface, (0, 0))
 
     if game_active:
-        # Птичка
-        bird_movement += gravity
+        # Птица
+        bird_movement += GRAVITY
         bird_rect.centery += bird_movement
         screen.blit(bird_surface, bird_rect)
-
+        
         # Трубы
         for pipe_item in pipe_list:
-            pipe = pipe_item['rect']
+            pipe = pipe_item["rect"]
             pipe.centerx -= 4
             
-            # Рисуем верхнюю или нижнюю трубу
-            if pipe.bottom >= SCREEN_HEIGHT:
-                screen.blit(pipe_bottom, pipe)
-            else:
-                screen.blit(pipe_top, pipe)
-
-            # Проверка столкновений
+            # Отрисовка
+            screen.blit(pipe_surface if pipe.bottom >= SCREEN_HEIGHT else pipe_top_surface, pipe)
+            
             if bird_rect.colliderect(pipe):
                 game_active = False
-
-            # Счёт очков (проверка пролета)
-            if not pipe_item['passed'] and bird_rect.left > pipe.right:
-                pipe_item['passed'] = True
-                # Добавляем 0.5 за каждую трубу (верхняя + нижняя = 1 очко)
-                score += 0.5
+            
+            if not pipe_item["passed"] and bird_rect.left > pipe.right:
+                pipe_item["passed"] = True
+                score += 0.5 # Две трубы = 1 балл
                 if score % 1 == 0 and score_sound:
                     score_sound.play()
 
-        # Удаление труб за экраном
-        pipe_list = [p for p in pipe_list if p['rect'].right > -50]
+        pipe_list = [p for p in pipe_list if p["rect"].right > -50]
 
-        # Границы экрана
-        if bird_rect.top <= -100 or bird_rect.bottom >= SCREEN_HEIGHT:
+        if bird_rect.top <= -50 or bird_rect.bottom >= SCREEN_HEIGHT:
             game_active = False
 
-        # Отображение текущего счета
-        score_surface = font.render(str(int(score)), True, WHITE)
-        score_rect = score_surface.get_rect(center=(200, 50))
-        screen.blit(score_surface, score_rect)
+        score_surf = font.render(str(int(score)), True, WHITE)
+        screen.blit(score_surf, (SCREEN_WIDTH//2 - 10, 50))
     else:
-        # ЭКРАН ОКОНЧАНИЯ
-        if score > high_score:
-            high_score = score
+        if score > high_score: high_score = score
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        screen.blit(overlay, (0, 0))
         
-        # Показываем результат
-        over_text = font.render("GAME OVER", True, WHITE)
-        best_text = small_font.render(f"BEST SCORE: {int(high_score)}", True, WHITE)
-        curr_text = small_font.render(f"YOUR SCORE: {int(score)}", True, WHITE)
-        retry_text = small_font.render("PRESS SPACE TO PLAY", True, WHITE)
-        
-        screen.blit(over_text, over_text.get_rect(center=(200, 200)))
-        screen.blit(curr_text, curr_text.get_rect(center=(200, 260)))
-        screen.blit(best_text, best_text.get_rect(center=(200, 310)))
-        screen.blit(retry_text, retry_text.get_rect(center=(200, 450)))
+        # Тексты
+        texts = [
+            (font.render("GAME OVER", True, RED), (200, 200)),
+            (font.render(f"SCORE: {int(score)}", True, WHITE), (200, 280)),
+            (font.render(f"BEST: {int(high_score)}", True, WHITE), (200, 340)),
+            (small_font.render("PRESS SPACE TO RESTART", True, WHITE), (200, 450))
+        ]
+        for surf, pos in texts:
+            screen.blit(surf, surf.get_rect(center=pos))
 
     pygame.display.update()
     clock.tick(60)
