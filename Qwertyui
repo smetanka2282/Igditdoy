@@ -1,6 +1,9 @@
 import pygame
 import random
 import sys
+import urllib.request
+import io
+import os
 
 # --- Инициализация ---
 pygame.mixer.pre_init(44100, -16, 2, 512)
@@ -19,11 +22,24 @@ bird_movement = 0
 game_active = False
 score = 0
 
-# --- Пути к файлам (твои оригинальные пути) ---
+# --- Пути к локальным файлам ---
 BIRD_PATH = r"C:\игра 9А Яковлев Матвей\assets\img\bird.png"
 BG_PATH = r"C:\игра 9А Яковлев Матвей\assets\img\Bg.png"
-PIPE_PATH = r"C:\игра 9А Яковлев Матвей\assets\img\pipe_bottom.png"
 SCORE_SOUND_PATH = r"C:\игра 9А Яковлев Матвей\assets\score.wav"
+
+# --- Ссылки на новые трубы (с прозрачным фоном) ---
+URL_PIPE_TOP = "[attachment_1](attachment)"
+URL_PIPE_BOTTOM = "[attachment_0](attachment)"
+
+def load_image_from_url(url):
+    """Функция для безопасной загрузки картинки по ссылке"""
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        response = urllib.request.urlopen(req)
+        return io.BytesIO(response.read())
+    except Exception as e:
+        print(f"Ошибка загрузки по ссылке {url}: {e}")
+        return None
 
 # --- Загрузка графики ---
 
@@ -32,6 +48,7 @@ try:
     bird_surface = pygame.image.load(BIRD_PATH).convert_alpha()
     bird_surface = pygame.transform.scale(bird_surface, (40, 30))
 except:
+    print("Птичка не найдена локально, использую желтый квадрат")
     bird_surface = pygame.Surface((40, 30)); bird_surface.fill((255, 255, 0))
 bird_rect = bird_surface.get_rect(center=(100, HEIGHT // 2))
 
@@ -42,32 +59,22 @@ try:
 except:
     bg_surface = pygame.Surface((WIDTH, HEIGHT)); bg_surface.fill((135, 206, 235))
 
-# 3. ТРУБЫ (Разрезаем твою одну картинку на две части)
-try:
-    # Загружаем картинку
-    full_pipe_image = pygame.image.load(PIPE_PATH).convert_alpha()
-    
-    # КРИТИЧЕСКИЙ МОМЕНТ: Убираем белый фон (если мозаика белая)
-    # Это сделает чисто белый цвет (255,255,255) полностью прозрачным
-    full_pipe_image.set_colorkey((255, 255, 255))
-    
-    img_width = full_pipe_image.get_width()
-    img_height = full_pipe_image.get_height()
-    
-    # Режем картинку пополам по высоте
-    # Верхняя половина картинки — это верхняя труба
-    pipe_top_surface = full_pipe_image.subsurface((0, 0, img_width, img_height // 2))
-    # Нижняя половина — это нижняя труба
-    pipe_bottom_surface = full_pipe_image.subsurface((0, img_height // 2, img_width, img_height // 2))
-    
-    # Подгоняем размеры под экран (ширина 60, высота 400)
-    pipe_top_surface = pygame.transform.scale(pipe_top_surface, (60, 400))
-    pipe_bottom_surface = pygame.transform.scale(pipe_bottom_surface, (60, 400))
+# 3. Трубы (Авто-загрузка)
+print("Загружаю трубы из интернета...")
+pipe_top_data = load_image_from_url(URL_PIPE_TOP)
+pipe_bottom_data = load_image_from_url(URL_PIPE_BOTTOM)
 
-except Exception as e:
-    print(f"Ошибка с трубами: {e}")
-    pipe_top_surface = pygame.Surface((60, 400)); pipe_top_surface.fill((34, 139, 34))
-    pipe_bottom_surface = pygame.Surface((60, 400)); pipe_bottom_surface.fill((34, 139, 34))
+if pipe_top_data and pipe_bottom_data:
+    pipe_top_surface = pygame.image.load(pipe_top_data).convert_alpha()
+    pipe_bottom_surface = pygame.image.load(pipe_bottom_data).convert_alpha()
+    # Подгоняем размер под игру
+    pipe_top_surface = pygame.transform.scale(pipe_top_surface, (60, 450))
+    pipe_bottom_surface = pygame.transform.scale(pipe_bottom_surface, (60, 450))
+    print("Трубы успешно загружены!")
+else:
+    # Если интернет упал, создаем зеленые прямоугольники
+    pipe_top_surface = pygame.Surface((60, 450)); pipe_top_surface.fill((34, 139, 34))
+    pipe_bottom_surface = pygame.Surface((60, 450)); pipe_bottom_surface.fill((34, 139, 34))
 
 # Звук
 try:
@@ -83,9 +90,8 @@ pipe_heights = [250, 300, 350, 400, 450]
 
 def create_pipe():
     random_pipe_pos = random.choice(pipe_heights)
-    # Генерируем хитбоксы для обеих половин
     bottom_pipe = pipe_bottom_surface.get_rect(midtop=(WIDTH + 50, random_pipe_pos))
-    top_pipe = pipe_top_surface.get_rect(midbottom=(WIDTH + 50, random_pipe_pos - 150))
+    top_pipe = pipe_top_surface.get_rect(midbottom=(WIDTH + 50, random_pipe_pos - 160)) # Зазор 160
     return bottom_pipe, top_pipe
 
 def move_pipes(pipes):
@@ -95,10 +101,9 @@ def move_pipes(pipes):
 
 def draw_pipes(pipes):
     for pipe in pipes:
-        # Если труба касается верха или низа, рисуем соответствующую часть
-        if pipe.bottom >= HEIGHT: 
+        if pipe.bottom >= HEIGHT: # Нижняя труба
             screen.blit(pipe_bottom_surface, pipe)
-        else:
+        else: # Верхняя труба
             screen.blit(pipe_top_surface, pipe)
 
 def check_collision(pipes):
@@ -135,7 +140,6 @@ while True:
         
         pipe_list = move_pipes(pipe_list)
         draw_pipes(pipe_list)
-        
         game_active = check_collision(pipe_list)
 
         for pipe in pipe_list:
@@ -144,8 +148,8 @@ while True:
                     score += 1
                     if score_sound: score_sound.play()
         
-        score_text = game_font.render(f"{int(score)}", True, (255, 255, 255))
-        screen.blit(score_text, (WIDTH // 2, 50))
+        score_surface = game_font.render(f"Счет: {int(score)}", True, (255, 255, 255))
+        screen.blit(score_surface, (WIDTH // 2 - 40, 50))
     else:
         msg = game_font.render("НАЖМИ ПРОБЕЛ", True, (255, 255, 255))
         screen.blit(msg, msg.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
