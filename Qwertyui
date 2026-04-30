@@ -6,45 +6,40 @@ WIDTH, HEIGHT = 900, 500
 FPS = 60
 GROUND_Y = HEIGHT - 80
 
-# Цвета уровней
+# Цвета
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GRAY = (50, 50, 50)
+CYAN = (0, 255, 255)
+
+# Цвета фонов для 10 уровней
 LEVEL_THEMES = [
-    (30, 30, 60),   # 1: Темно-синий
-    (30, 60, 30),   # 2: Зеленый
-    (60, 30, 30),   # 3: Бордовый
-    (50, 20, 70),   # 4: Фиолетовый
-    (20, 50, 50),   # 5: Бирюзовый
-    (80, 40, 0),    # 6: Оранжевый
-    (40, 40, 40),   # 7: Серый
-    (0, 0, 0),      # 8: Черный
-    (100, 20, 20),  # 9: Красный
-    (255, 215, 0)   # 10: Золотой (Финал)
+    (30, 30, 60), (30, 60, 30), (60, 30, 30), (50, 20, 70), (20, 50, 50),
+    (80, 40, 0), (40, 40, 40), (20, 20, 20), (100, 20, 20), (150, 120, 0)
 ]
 
-# Определение испытаний (0 - пусто, 1 - шип, 2 - двойной шип, 3 - блок, 4 - шип на блоке)
-# Каждый вложенный список — это отдельный уровень
+# Дизайн уровней (испытания)
 LEVEL_DESIGNS = [
-    [1, 0, 0, 1, 0, 0, 1, 0, 1],                # Уровень 1: Одиночные шипы
-    [2, 0, 0, 1, 0, 2, 0, 0, 2],                # Уровень 2: Двойные шипы
-    [3, 0, 1, 0, 3, 0, 1, 0, 1, 1],             # Уровень 3: Блоки и прыжки
-    [1, 2, 0, 1, 2, 0, 3, 1, 0, 1],             # Уровень 4: Смешанный
-    [3, 3, 0, 1, 1, 0, 3, 3, 0, 2, 2],          # Уровень 5: Двойные препятствия
-    [4, 0, 4, 0, 1, 2, 3, 0, 1, 1, 1],          # Уровень 6: Высокие прыжки
-    [1, 1, 1, 0, 3, 3, 3, 0, 2, 2, 2],          # Уровень 7: Серии
-    [3, 4, 3, 0, 2, 3, 1, 2, 3, 0, 4],          # Уровень 8: Лабиринт
-    [2, 2, 3, 4, 0, 4, 3, 2, 2, 1, 1, 2],       # Уровень 9: Хардкор
-    [4, 4, 4, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4]     # Уровень 10: Финальное испытание
+    [1, 0, 1, 0, 1, 0, 1, 1],                   # 1
+    [2, 0, 1, 0, 2, 0, 1, 2],                   # 2
+    [3, 0, 1, 3, 0, 1, 3, 1],                   # 3
+    [1, 2, 3, 0, 1, 2, 3, 0, 1],                # 4
+    [3, 3, 0, 2, 2, 0, 1, 1, 3],                # 5
+    [4, 0, 4, 1, 1, 3, 0, 4],                   # 6
+    [1, 1, 1, 3, 3, 3, 2, 2, 2],                # 7
+    [4, 3, 2, 1, 4, 3, 2, 1],                   # 8
+    [2, 2, 4, 4, 3, 3, 1, 2, 4],                # 9
+    [4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 4]     # 10
 ]
 
 class Obstacle:
     def __init__(self, x, type):
         self.x = x
         self.type = type
-        self.width = 40
-        self.height = 40
-        self.rect = pygame.Rect(self.x, GROUND_Y - self.height, self.width, self.height)
+        self.rect = pygame.Rect(self.x, GROUND_Y - 40, 40, 40)
 
     def draw(self, screen):
-        if self.type == 1: # Один шип
+        if self.type == 1: # Шип
             pygame.draw.polygon(screen, (255, 50, 50), [(self.rect.left, self.rect.bottom), (self.rect.centerx, self.rect.top), (self.rect.right, self.rect.bottom)])
         elif self.type == 2: # Двойной шип
             for i in range(2):
@@ -52,22 +47,21 @@ class Obstacle:
                 pygame.draw.polygon(screen, (255, 100, 50), [(self.rect.left + x_off, self.rect.bottom), (self.rect.centerx + x_off, self.rect.top), (self.rect.right + x_off, self.rect.bottom)])
         elif self.type == 3: # Блок
             pygame.draw.rect(screen, (150, 150, 150), self.rect)
-            pygame.draw.rect(screen, (255, 255, 255), self.rect, 2)
+            pygame.draw.rect(screen, WHITE, self.rect, 2)
         elif self.type == 4: # Шип на блоке
             pygame.draw.rect(screen, (150, 150, 150), self.rect)
             pygame.draw.polygon(screen, (255, 50, 50), [(self.rect.left, self.rect.top), (self.rect.centerx, self.rect.top - 30), (self.rect.right, self.rect.top)])
 
 class Player:
     def __init__(self):
-        self.rect = pygame.Rect(100, GROUND_Y - 40, 40, 40)
+        self.rect = pygame.Rect(150, GROUND_Y - 40, 40, 40)
         self.vel_y = 0
         self.gravity = 0.8
-        self.jump_pow = -14
         self.angle = 0
 
     def jump(self):
         if self.rect.bottom >= GROUND_Y:
-            self.vel_y = self.jump_pow
+            self.vel_y = -14
 
     def update(self):
         self.vel_y += self.gravity
@@ -85,85 +79,111 @@ def main():
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("Verdana", 24, bold=True)
     
-    current_level_idx = 0
-    
-    def load_level(idx):
+    state = "MENU"
+    current_level = 0
+    player = None
+    obstacles = []
+    level_width = 0
+    progress_x = 0
+
+    def start_level(idx):
+        nonlocal player, obstacles, level_width, progress_x, current_level, state
+        current_level = idx
         player = Player()
         obstacles = []
         design = LEVEL_DESIGNS[idx]
         for i, obs_type in enumerate(design):
             if obs_type != 0:
-                obstacles.append(Obstacle(WIDTH + i * 300, obs_type))
-        return player, obstacles, WIDTH + len(design) * 300
+                obstacles.append(Obstacle(WIDTH + i * 350, obs_type))
+        level_width = WIDTH + len(design) * 350
+        progress_x = 0
+        state = "PLAY"
 
-    player, obstacles, level_end_x = load_level(current_level_idx)
-    speed = 7
-    running = True
-    game_state = "PLAY" # PLAY, GAMEOVER, WIN
-
-    while running:
-        theme_color = LEVEL_THEMES[current_level_idx]
-        screen.fill(theme_color)
+    while True:
+        screen.fill(BLACK)
+        mouse_pos = pygame.mouse.get_pos()
         
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    if game_state == "PLAY":
-                        player.jump()
-                    else:
-                        player, obstacles, level_end_x = load_level(current_level_idx)
-                        game_state = "PLAY"
-
-        if game_state == "PLAY":
-            player.update()
-            level_end_x -= speed
+                pygame.quit()
+                sys.exit()
             
-            # Пол
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if state == "MENU":
+                    # Проверка клика по кнопкам уровней
+                    for i in range(10):
+                        bx = 100 + (i % 5) * 150
+                        by = 150 + (i // 5) * 150
+                        if pygame.Rect(bx, by, 100, 100).collidepoint(mouse_pos):
+                            start_level(i)
+                
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    state = "MENU"
+                if event.key == pygame.K_SPACE:
+                    if state == "PLAY":
+                        player.jump()
+                    elif state == "GAMEOVER":
+                        start_level(current_level)
+
+        if state == "MENU":
+            title = font.render("SELECT LEVEL", True, WHITE)
+            screen.blit(title, (WIDTH//2 - 100, 50))
+            
+            for i in range(10):
+                bx = 100 + (i % 5) * 150
+                by = 150 + (i // 5) * 150
+                rect = pygame.Rect(bx, by, 100, 100)
+                
+                # Подсветка при наведении
+                color = LEVEL_THEMES[i] if rect.collidepoint(mouse_pos) else GRAY
+                pygame.draw.rect(screen, color, rect, border_radius=10)
+                pygame.draw.rect(screen, WHITE, rect, 2, border_radius=10)
+                
+                num_txt = font.render(str(i + 1), True, WHITE)
+                screen.blit(num_txt, (bx + 40, by + 35))
+
+        elif state == "PLAY":
+            screen.fill(LEVEL_THEMES[current_level])
             pygame.draw.rect(screen, (20, 20, 20), (0, GROUND_Y, WIDTH, HEIGHT - GROUND_Y))
+            
+            player.update()
+            progress_x += 8 # Скорость
             
             # Отрисовка игрока
             p_surf = pygame.Surface((40, 40), pygame.SRCALPHA)
-            pygame.draw.rect(p_surf, (0, 255, 255), (0, 0, 40, 40))
-            pygame.draw.rect(p_surf, (255, 255, 255), (0, 0, 40, 40), 2)
+            pygame.draw.rect(p_surf, CYAN, (0, 0, 40, 40))
+            pygame.draw.rect(p_surf, WHITE, (0, 0, 40, 40), 2)
             rot_p = pygame.transform.rotate(p_surf, player.angle)
             screen.blit(rot_p, rot_p.get_rect(center=player.rect.center))
 
             # Препятствия
-            for obs in obstacles[:]:
-                obs.x -= speed
-                obs.rect.x = obs.x
+            for obs in obstacles:
+                obs_x = obs.x - progress_x
+                obs.rect.x = obs_x
                 obs.draw(screen)
                 
                 if player.rect.colliderect(obs.rect):
-                    game_state = "GAMEOVER"
+                    state = "GAMEOVER"
 
-            # Проверка прохождения уровня
-            if level_end_x < 0:
-                if current_level_idx < 9:
-                    current_level_idx += 1
-                    speed += 0.5
-                    player, obstacles, level_end_x = load_level(current_level_idx)
-                else:
-                    game_state = "WIN"
+            if progress_x > level_width:
+                state = "WIN"
 
-            # Текст
-            txt = font.render(f"LEVEL {current_level_idx + 1}/10", True, (255, 255, 255))
-            screen.blit(txt, (20, 20))
+            info = font.render(f"LEVEL {current_level + 1}  (ESC for Menu)", True, WHITE)
+            screen.blit(info, (20, 20))
 
-        elif game_state == "GAMEOVER":
-            msg = font.render("CRASHED! SPACE TO RETRY", True, (255, 255, 255))
-            screen.blit(msg, (WIDTH//2 - 150, HEIGHT//2))
-        
-        elif game_state == "WIN":
-            msg = font.render("ALL LEVELS COMPLETE! YOU ARE A PRO!", True, (255, 255, 0))
+        elif state == "GAMEOVER":
+            screen.fill((100, 0, 0))
+            msg = font.render("CRASHED! SPACE: RETRY / ESC: MENU", True, WHITE)
+            screen.blit(msg, (WIDTH//2 - 250, HEIGHT//2))
+
+        elif state == "WIN":
+            screen.fill((0, 100, 0))
+            msg = font.render("LEVEL COMPLETE! ESC: MENU", True, WHITE)
             screen.blit(msg, (WIDTH//2 - 200, HEIGHT//2))
 
         pygame.display.flip()
         clock.tick(FPS)
-
-    pygame.quit()
 
 if __name__ == "__main__":
     main()
