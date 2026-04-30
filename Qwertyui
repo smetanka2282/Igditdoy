@@ -1,158 +1,133 @@
 import pygame
-import random
 import sys
-import urllib.request
-import io
-import os
 
-# --- Инициализация ---
-pygame.mixer.pre_init(44100, -16, 2, 512)
-pygame.init()
+# Настройки окна
+WIDTH, HEIGHT = 800, 450
+FPS = 60
 
-WIDTH = 400
-HEIGHT = 600
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Flappy Bird - 9А Яковлев Матвей")
-clock = pygame.time.Clock()
-game_font = pygame.font.SysFont("arial", 28, bold=True)
+# Цвета
+BG_COLOR = (20, 20, 35)      # Темно-синий фон
+GROUND_COLOR = (40, 40, 60)  # Цвет пола
+PLAYER_COLOR = (0, 255, 200) # Бирюзовый куб
 
-# Игровые переменные
-gravity = 0.25
-bird_movement = 0
-game_active = False
-score = 0
+class Game:
+    def __init__(self):
+        pygame.init()
+        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        pygame.display.set_caption("Geometry Dash 9A")
+        self.clock = pygame.time.Clock()
+        self.font = pygame.font.SysFont("Verdana", 24, bold=True)
+        
+        # Игрок
+        self.player_size = 40
+        self.player_rect = pygame.Rect(150, HEIGHT - 100, self.player_size, self.player_size)
+        self.vel_y = 0
+        self.gravity = 0.9
+        self.jump_power = -14
+        self.angle = 0  # Для вращения
+        
+        # Препятствия
+        self.obstacle_width = 35
+        self.obstacle_height = 45
+        self.obstacles = []
+        self.spawn_timer = 0
+        
+        self.score = 0
+        self.game_active = True
 
-# --- Пути к локальным файлам ---
-BIRD_PATH = r"C:\игра 9А Яковлев Матвей\assets\img\bird.png"
-BG_PATH = r"C:\игра 9А Яковлев Матвей\assets\img\Bg.png"
-SCORE_SOUND_PATH = r"C:\игра 9А Яковлев Матвей\assets\score.wav"
+    def reset_game(self):
+        self.player_rect.y = HEIGHT - 100
+        self.vel_y = 0
+        self.obstacles = []
+        self.score = 0
+        self.angle = 0
+        self.game_active = True
 
-# --- Ссылки на новые трубы (с прозрачным фоном) ---
-URL_PIPE_TOP = "[attachment_1](attachment)"
-URL_PIPE_BOTTOM = "[attachment_0](attachment)"
+    def spawn_obstacle(self):
+        # Создаем треугольное препятствие (шип) за краем экрана
+        obs = pygame.Rect(WIDTH + 50, HEIGHT - 90, self.obstacle_width, self.obstacle_height)
+        self.obstacles.append(obs)
 
-def load_image_from_url(url):
-    """Функция для безопасной загрузки картинки по ссылке"""
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        response = urllib.request.urlopen(req)
-        return io.BytesIO(response.read())
-    except Exception as e:
-        print(f"Ошибка загрузки по ссылке {url}: {e}")
-        return None
+    def draw_player(self):
+        # Эффект вращения: создаем поверхность, крутим её и рисуем
+        player_surface = pygame.Surface((self.player_size, self.player_size), pygame.SRCALPHA)
+        pygame.draw.rect(player_surface, PLAYER_COLOR, (0, 0, self.player_size, self.player_size))
+        pygame.draw.rect(player_surface, (255, 255, 255), (0, 0, self.player_size, self.player_size), 3) # Рамка
+        
+        rotated_surface = pygame.transform.rotate(player_surface, self.angle)
+        new_rect = rotated_surface.get_rect(center=self.player_rect.center)
+        self.screen.blit(rotated_surface, new_rect)
 
-# --- Загрузка графики ---
+    def run(self):
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        if self.game_active:
+                            if self.player_rect.bottom >= HEIGHT - 50:
+                                self.vel_y = self.jump_power
+                        else:
+                            self.reset_game()
 
-# 1. Птичка
-try:
-    bird_surface = pygame.image.load(BIRD_PATH).convert_alpha()
-    bird_surface = pygame.transform.scale(bird_surface, (40, 30))
-except:
-    print("Птичка не найдена локально, использую желтый квадрат")
-    bird_surface = pygame.Surface((40, 30)); bird_surface.fill((255, 255, 0))
-bird_rect = bird_surface.get_rect(center=(100, HEIGHT // 2))
-
-# 2. Фон
-try:
-    bg_surface = pygame.image.load(BG_PATH).convert()
-    bg_surface = pygame.transform.scale(bg_surface, (WIDTH, HEIGHT))
-except:
-    bg_surface = pygame.Surface((WIDTH, HEIGHT)); bg_surface.fill((135, 206, 235))
-
-# 3. Трубы (Авто-загрузка)
-print("Загружаю трубы из интернета...")
-pipe_top_data = load_image_from_url(URL_PIPE_TOP)
-pipe_bottom_data = load_image_from_url(URL_PIPE_BOTTOM)
-
-if pipe_top_data and pipe_bottom_data:
-    pipe_top_surface = pygame.image.load(pipe_top_data).convert_alpha()
-    pipe_bottom_surface = pygame.image.load(pipe_bottom_data).convert_alpha()
-    # Подгоняем размер под игру
-    pipe_top_surface = pygame.transform.scale(pipe_top_surface, (60, 450))
-    pipe_bottom_surface = pygame.transform.scale(pipe_bottom_surface, (60, 450))
-    print("Трубы успешно загружены!")
-else:
-    # Если интернет упал, создаем зеленые прямоугольники
-    pipe_top_surface = pygame.Surface((60, 450)); pipe_top_surface.fill((34, 139, 34))
-    pipe_bottom_surface = pygame.Surface((60, 450)); pipe_bottom_surface.fill((34, 139, 34))
-
-# Звук
-try:
-    score_sound = pygame.mixer.Sound(SCORE_SOUND_PATH)
-except:
-    score_sound = None
-
-# --- Логика труб ---
-pipe_list = []
-SPAWNPIPE = pygame.USEREVENT
-pygame.time.set_timer(SPAWNPIPE, 1500)
-pipe_heights = [250, 300, 350, 400, 450]
-
-def create_pipe():
-    random_pipe_pos = random.choice(pipe_heights)
-    bottom_pipe = pipe_bottom_surface.get_rect(midtop=(WIDTH + 50, random_pipe_pos))
-    top_pipe = pipe_top_surface.get_rect(midbottom=(WIDTH + 50, random_pipe_pos - 160)) # Зазор 160
-    return bottom_pipe, top_pipe
-
-def move_pipes(pipes):
-    for pipe in pipes:
-        pipe.centerx -= 3
-    return [pipe for pipe in pipes if pipe.right > -50]
-
-def draw_pipes(pipes):
-    for pipe in pipes:
-        if pipe.bottom >= HEIGHT: # Нижняя труба
-            screen.blit(pipe_bottom_surface, pipe)
-        else: # Верхняя труба
-            screen.blit(pipe_top_surface, pipe)
-
-def check_collision(pipes):
-    for pipe in pipes:
-        if bird_rect.colliderect(pipe): return False
-    if bird_rect.top <= -50 or bird_rect.bottom >= HEIGHT: return False
-    return True
-
-# --- Главный цикл ---
-while True:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                if game_active:
-                    bird_movement = -6
+            if self.game_active:
+                # Гравитация и движение
+                self.vel_y += self.gravity
+                self.player_rect.y += self.vel_y
+                
+                # Ограничение по полу
+                if self.player_rect.bottom > HEIGHT - 50:
+                    self.player_rect.bottom = HEIGHT - 50
+                    self.vel_y = 0
+                    # Выравниваем угол при приземлении к ближайшим 90 градусам
+                    self.angle = (self.angle // 90) * 90
                 else:
-                    game_active = True
-                    pipe_list.clear()
-                    bird_rect.center = (100, HEIGHT // 2)
-                    bird_movement = 0
-                    score = 0
-        if event.type == SPAWNPIPE and game_active:
-            pipe_list.extend(create_pipe())
+                    # Вращаем куб в воздухе
+                    self.angle -= 5 
 
-    screen.blit(bg_surface, (0, 0))
+                # Отрисовка
+                self.screen.fill(BG_COLOR)
+                pygame.draw.rect(self.screen, GROUND_COLOR, (0, HEIGHT - 50, WIDTH, 50))
+                pygame.draw.line(self.screen, (100, 100, 150), (0, HEIGHT - 50), (WIDTH, HEIGHT - 50), 4)
 
-    if game_active:
-        bird_movement += gravity
-        bird_rect.centery += int(bird_movement)
-        screen.blit(bird_surface, bird_rect)
-        
-        pipe_list = move_pipes(pipe_list)
-        draw_pipes(pipe_list)
-        game_active = check_collision(pipe_list)
+                # Управление препятствиями
+                self.spawn_timer += 1
+                if self.spawn_timer > 70: # Интервал появления
+                    self.spawn_obstacle()
+                    self.spawn_timer = 0
 
-        for pipe in pipe_list:
-            if pipe.bottom >= HEIGHT:
-                if pipe.centerx - 3 < bird_rect.centerx <= pipe.centerx:
-                    score += 1
-                    if score_sound: score_sound.play()
-        
-        score_surface = game_font.render(f"Счет: {int(score)}", True, (255, 255, 255))
-        screen.blit(score_surface, (WIDTH // 2 - 40, 50))
-    else:
-        msg = game_font.render("НАЖМИ ПРОБЕЛ", True, (255, 255, 255))
-        screen.blit(msg, msg.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
+                for obs in self.obstacles[:]:
+                    obs.x -= 8 # Скорость движения уровня
+                    # Рисуем шип
+                    pygame.draw.polygon(self.screen, (255, 60, 60), [
+                        (obs.left, obs.bottom),
+                        (obs.centerx, obs.top),
+                        (obs.right, obs.bottom)
+                    ])
+                    
+                    # Проверка столкновений
+                    if self.player_rect.colliderect(obs):
+                        self.game_active = False
 
-    pygame.display.update()
-    clock.tick(120)
+                    if obs.right < 0:
+                        self.obstacles.remove(obs)
+                        self.score += 1
+
+                self.draw_player()
+                
+                # Счет
+                score_surf = self.font.render(f"SCORE: {self.score}", True, (255, 255, 255))
+                self.screen.blit(score_surf, (20, 20))
+            else:
+                # Экран проигрыша
+                over_surf = self.font.render("GAME OVER - PRESS SPACE TO RESTART", True, (255, 255, 255))
+                self.screen.blit(over_surf, (WIDTH // 2 - 200, HEIGHT // 2))
+
+            pygame.display.flip()
+            self.clock.tick(FPS)
+
+if __name__ == "__main__":
+    Game().run()
