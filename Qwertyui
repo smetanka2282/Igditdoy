@@ -1,130 +1,135 @@
 import pygame
 import sys
+import random
 
-# Настройки окна
+# Константы
 WIDTH, HEIGHT = 800, 450
 FPS = 60
+GROUND_HEIGHT = 50
 
-# Цвета
-BG_COLOR = (20, 20, 35)      # Темно-синий фон
-GROUND_COLOR = (40, 40, 60)  # Цвет пола
-PLAYER_COLOR = (0, 255, 200) # Бирюзовый куб
+# Цвета для уровней (будут меняться)
+COLORS = [
+    (0, 255, 200), (0, 200, 255), (0, 100, 255), (100, 0, 255),
+    (200, 0, 255), (255, 0, 200), (255, 0, 100), (255, 50, 0),
+    (255, 150, 0), (255, 255, 0)
+]
 
 class Game:
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        pygame.display.set_caption("Geometry Dash 9A")
+        pygame.display.set_caption("Geometry Dash: 10 Levels Edition")
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont("Verdana", 24, bold=True)
+        self.font = pygame.font.SysFont("Verdana", 22, bold=True)
         
-        # Игрок
-        self.player_size = 40
-        self.player_rect = pygame.Rect(150, HEIGHT - 100, self.player_size, self.player_size)
+        self.player_rect = pygame.Rect(150, HEIGHT - 100, 40, 40)
         self.vel_y = 0
         self.gravity = 0.9
         self.jump_power = -14
-        self.angle = 0  # Для вращения
+        self.angle = 0
         
-        # Препятствия
-        self.obstacle_width = 35
-        self.obstacle_height = 45
         self.obstacles = []
-        self.spawn_timer = 0
-        
+        self.level = 1
         self.score = 0
         self.game_active = True
+        
+        # Настройки сложности
+        self.base_speed = 7
+        self.spawn_rate = 80  # Чем меньше, тем чаще шипы
 
     def reset_game(self):
         self.player_rect.y = HEIGHT - 100
         self.vel_y = 0
         self.obstacles = []
         self.score = 0
+        self.level = 1
         self.angle = 0
         self.game_active = True
 
-    def spawn_obstacle(self):
-        # Создаем треугольное препятствие (шип) за краем экрана
-        obs = pygame.Rect(WIDTH + 50, HEIGHT - 90, self.obstacle_width, self.obstacle_height)
-        self.obstacles.append(obs)
-
-    def draw_player(self):
-        # Эффект вращения: создаем поверхность, крутим её и рисуем
-        player_surface = pygame.Surface((self.player_size, self.player_size), pygame.SRCALPHA)
-        pygame.draw.rect(player_surface, PLAYER_COLOR, (0, 0, self.player_size, self.player_size))
-        pygame.draw.rect(player_surface, (255, 255, 255), (0, 0, self.player_size, self.player_size), 3) # Рамка
+    def update_difficulty(self):
+        # Каждые 5 очков — новый уровень
+        new_level = (self.score // 5) + 1
+        if new_level > 10: new_level = 10 # Максимум 10
         
-        rotated_surface = pygame.transform.rotate(player_surface, self.angle)
-        new_rect = rotated_surface.get_rect(center=self.player_rect.center)
-        self.screen.blit(rotated_surface, new_rect)
+        if new_level != self.level:
+            self.level = new_level
+            # Увеличиваем скорость и частоту появления с каждым уровнем
+            self.base_speed = 7 + (self.level * 0.8)
+            self.spawn_rate = max(40, 80 - (self.level * 4))
 
     def run(self):
+        spawn_timer = 0
+        
         while True:
+            current_color = COLORS[self.level - 1]
+            
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-                
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
                         if self.game_active:
-                            if self.player_rect.bottom >= HEIGHT - 50:
+                            if self.player_rect.bottom >= HEIGHT - GROUND_HEIGHT:
                                 self.vel_y = self.jump_power
                         else:
                             self.reset_game()
 
             if self.game_active:
-                # Гравитация и движение
+                # Физика
                 self.vel_y += self.gravity
                 self.player_rect.y += self.vel_y
                 
-                # Ограничение по полу
-                if self.player_rect.bottom > HEIGHT - 50:
-                    self.player_rect.bottom = HEIGHT - 50
+                if self.player_rect.bottom > HEIGHT - GROUND_HEIGHT:
+                    self.player_rect.bottom = HEIGHT - GROUND_HEIGHT
                     self.vel_y = 0
-                    # Выравниваем угол при приземлении к ближайшим 90 градусам
                     self.angle = (self.angle // 90) * 90
                 else:
-                    # Вращаем куб в воздухе
-                    self.angle -= 5 
+                    self.angle -= (5 + self.level) # Вращение быстрее на уровнях
 
-                # Отрисовка
-                self.screen.fill(BG_COLOR)
-                pygame.draw.rect(self.screen, GROUND_COLOR, (0, HEIGHT - 50, WIDTH, 50))
-                pygame.draw.line(self.screen, (100, 100, 150), (0, HEIGHT - 50), (WIDTH, HEIGHT - 50), 4)
+                # Спавн препятствий
+                spawn_timer += 1
+                if spawn_timer > self.spawn_rate:
+                    obs = pygame.Rect(WIDTH + 50, HEIGHT - 90, 35, 40)
+                    self.obstacles.append(obs)
+                    spawn_timer = 0
 
-                # Управление препятствиями
-                self.spawn_timer += 1
-                if self.spawn_timer > 70: # Интервал появления
-                    self.spawn_obstacle()
-                    self.spawn_timer = 0
+                # Отрисовка фона
+                self.screen.fill((10, 10, 20))
+                pygame.draw.rect(self.screen, (30, 30, 50), (0, HEIGHT - GROUND_HEIGHT, WIDTH, GROUND_HEIGHT))
 
+                # Обновление препятствий
                 for obs in self.obstacles[:]:
-                    obs.x -= 8 # Скорость движения уровня
-                    # Рисуем шип
-                    pygame.draw.polygon(self.screen, (255, 60, 60), [
-                        (obs.left, obs.bottom),
-                        (obs.centerx, obs.top),
-                        (obs.right, obs.bottom)
+                    obs.x -= self.base_speed
+                    
+                    # Шип
+                    pygame.draw.polygon(self.screen, (255, 50, 50), [
+                        (obs.left, obs.bottom), (obs.centerx, obs.top), (obs.right, obs.bottom)
                     ])
                     
-                    # Проверка столкновений
                     if self.player_rect.colliderect(obs):
                         self.game_active = False
 
                     if obs.right < 0:
                         self.obstacles.remove(obs)
                         self.score += 1
+                        self.update_difficulty()
 
-                self.draw_player()
-                
-                # Счет
-                score_surf = self.font.render(f"SCORE: {self.score}", True, (255, 255, 255))
-                self.screen.blit(score_surf, (20, 20))
+                # Игрок (вращающийся)
+                p_surf = pygame.Surface((40, 40), pygame.SRCALPHA)
+                pygame.draw.rect(p_surf, current_color, (0, 0, 40, 40))
+                pygame.draw.rect(p_surf, (255, 255, 255), (0, 0, 40, 40), 3)
+                rot_p = pygame.transform.rotate(p_surf, self.angle)
+                self.screen.blit(rot_p, rot_p.get_rect(center=self.player_rect.center))
+
+                # Интерфейс
+                lvl_text = self.font.render(f"LEVEL: {self.level}/10", True, (255, 255, 255))
+                scr_text = self.font.render(f"SCORE: {self.score}", True, (255, 255, 255))
+                self.screen.blit(lvl_text, (20, 20))
+                self.screen.blit(scr_text, (20, 50))
             else:
-                # Экран проигрыша
-                over_surf = self.font.render("GAME OVER - PRESS SPACE TO RESTART", True, (255, 255, 255))
-                self.screen.blit(over_surf, (WIDTH // 2 - 200, HEIGHT // 2))
+                msg = self.font.render(f"GAME OVER! LEVEL {self.level} - SPACE TO RESTART", True, (255, 255, 255))
+                self.screen.blit(msg, (WIDTH//2 - 250, HEIGHT//2))
 
             pygame.display.flip()
             self.clock.tick(FPS)
