@@ -6,7 +6,6 @@ import sys
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
 
-# Параметры окна
 WIDTH = 400
 HEIGHT = 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -20,7 +19,7 @@ bird_movement = 0
 game_active = False
 score = 0
 
-# --- Пути к файлам ---
+# --- Пути к файлам (твои оригинальные пути) ---
 BIRD_PATH = r"C:\игра 9А Яковлев Матвей\assets\img\bird.png"
 BG_PATH = r"C:\игра 9А Яковлев Матвей\assets\img\Bg.png"
 PIPE_PATH = r"C:\игра 9А Яковлев Матвей\assets\img\pipe_bottom.png"
@@ -33,8 +32,7 @@ try:
     bird_surface = pygame.image.load(BIRD_PATH).convert_alpha()
     bird_surface = pygame.transform.scale(bird_surface, (40, 30))
 except:
-    bird_surface = pygame.Surface((40, 30))
-    bird_surface.fill((255, 255, 0))
+    bird_surface = pygame.Surface((40, 30)); bird_surface.fill((255, 255, 0))
 bird_rect = bird_surface.get_rect(center=(100, HEIGHT // 2))
 
 # 2. Фон
@@ -42,25 +40,32 @@ try:
     bg_surface = pygame.image.load(BG_PATH).convert()
     bg_surface = pygame.transform.scale(bg_surface, (WIDTH, HEIGHT))
 except:
-    bg_surface = pygame.Surface((WIDTH, HEIGHT))
-    bg_surface.fill((135, 206, 235))
+    bg_surface = pygame.Surface((WIDTH, HEIGHT)); bg_surface.fill((135, 206, 235))
 
-# 3. ТРУБЫ (Разрезаем одну картинку на две)
+# 3. ТРУБЫ (Разрезаем твою одну картинку на две части)
 try:
+    # Загружаем картинку
     full_pipe_image = pygame.image.load(PIPE_PATH).convert_alpha()
+    
+    # КРИТИЧЕСКИЙ МОМЕНТ: Убираем белый фон (если мозаика белая)
+    # Это сделает чисто белый цвет (255,255,255) полностью прозрачным
+    full_pipe_image.set_colorkey((255, 255, 255))
+    
     img_width = full_pipe_image.get_width()
     img_height = full_pipe_image.get_height()
     
-    # Режем пополам по вертикали
-    # subsurface((x, y, ширина, высота))
+    # Режем картинку пополам по высоте
+    # Верхняя половина картинки — это верхняя труба
     pipe_top_surface = full_pipe_image.subsurface((0, 0, img_width, img_height // 2))
+    # Нижняя половина — это нижняя труба
     pipe_bottom_surface = full_pipe_image.subsurface((0, img_height // 2, img_width, img_height // 2))
     
-    # Масштабируем до игровых размеров
+    # Подгоняем размеры под экран (ширина 60, высота 400)
     pipe_top_surface = pygame.transform.scale(pipe_top_surface, (60, 400))
     pipe_bottom_surface = pygame.transform.scale(pipe_bottom_surface, (60, 400))
+
 except Exception as e:
-    print(f"Ошибка загрузки труб: {e}")
+    print(f"Ошибка с трубами: {e}")
     pipe_top_surface = pygame.Surface((60, 400)); pipe_top_surface.fill((34, 139, 34))
     pipe_bottom_surface = pygame.Surface((60, 400)); pipe_bottom_surface.fill((34, 139, 34))
 
@@ -78,9 +83,8 @@ pipe_heights = [250, 300, 350, 400, 450]
 
 def create_pipe():
     random_pipe_pos = random.choice(pipe_heights)
-    # Нижняя труба
+    # Генерируем хитбоксы для обеих половин
     bottom_pipe = pipe_bottom_surface.get_rect(midtop=(WIDTH + 50, random_pipe_pos))
-    # Верхняя труба (с зазором 150 пикселей)
     top_pipe = pipe_top_surface.get_rect(midbottom=(WIDTH + 50, random_pipe_pos - 150))
     return bottom_pipe, top_pipe
 
@@ -91,67 +95,58 @@ def move_pipes(pipes):
 
 def draw_pipes(pipes):
     for pipe in pipes:
-        if pipe.bottom >= HEIGHT: # Если нижняя часть трубы уходит в пол — это нижняя труба
+        # Если труба касается верха или низа, рисуем соответствующую часть
+        if pipe.bottom >= HEIGHT: 
             screen.blit(pipe_bottom_surface, pipe)
         else:
             screen.blit(pipe_top_surface, pipe)
 
 def check_collision(pipes):
     for pipe in pipes:
-        if bird_rect.colliderect(pipe):
-            return False
-    if bird_rect.top <= -50 or bird_rect.bottom >= HEIGHT:
-        return False
+        if bird_rect.colliderect(pipe): return False
+    if bird_rect.top <= -50 or bird_rect.bottom >= HEIGHT: return False
     return True
 
-# --- Цикл игры ---
+# --- Главный цикл ---
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
-        
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE and game_active:
-                bird_movement = 0
-                bird_movement -= 6 
-            
-            if event.key == pygame.K_SPACE and not game_active:
-                game_active = True
-                pipe_list.clear()
-                bird_rect.center = (100, HEIGHT // 2)
-                bird_movement = 0
-                score = 0
-
+            if event.key == pygame.K_SPACE:
+                if game_active:
+                    bird_movement = -6
+                else:
+                    game_active = True
+                    pipe_list.clear()
+                    bird_rect.center = (100, HEIGHT // 2)
+                    bird_movement = 0
+                    score = 0
         if event.type == SPAWNPIPE and game_active:
             pipe_list.extend(create_pipe())
 
-    # Фон
     screen.blit(bg_surface, (0, 0))
 
     if game_active:
-        # Птичка
         bird_movement += gravity
         bird_rect.centery += int(bird_movement)
         screen.blit(bird_surface, bird_rect)
         
-        # Трубы
         pipe_list = move_pipes(pipe_list)
         draw_pipes(pipe_list)
         
         game_active = check_collision(pipe_list)
 
-        # Очки
         for pipe in pipe_list:
-            if pipe.bottom >= HEIGHT: # Считаем по нижним трубам
+            if pipe.bottom >= HEIGHT:
                 if pipe.centerx - 3 < bird_rect.centerx <= pipe.centerx:
                     score += 1
                     if score_sound: score_sound.play()
         
-        score_text = game_font.render(f"Счет: {int(score)}", True, (255, 255, 255))
-        screen.blit(score_text, (WIDTH // 2 - 40, 50))
+        score_text = game_font.render(f"{int(score)}", True, (255, 255, 255))
+        screen.blit(score_text, (WIDTH // 2, 50))
     else:
-        # Экран меню
         msg = game_font.render("НАЖМИ ПРОБЕЛ", True, (255, 255, 255))
         screen.blit(msg, msg.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
 
