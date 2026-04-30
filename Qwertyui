@@ -1,24 +1,20 @@
 import pygame
 import random
 import sys
-import urllib.request
-import io
 
-# --- Инициализация игры и звука ---
+# --- Инициализация ---
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
 
-# Настройки окна
+# Параметры окна
 WIDTH = 400
 HEIGHT = 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Flappy Bird - 9А Яковлев Матвей")
 clock = pygame.time.Clock()
-
-# Шрифты для текста
 game_font = pygame.font.SysFont("arial", 28, bold=True)
 
-# Физика и переменные игры
+# Игровые переменные
 gravity = 0.25
 bird_movement = 0
 game_active = False
@@ -27,61 +23,64 @@ score = 0
 # --- Пути к файлам ---
 BIRD_PATH = r"C:\игра 9А Яковлев Матвей\assets\img\bird.png"
 BG_PATH = r"C:\игра 9А Яковлев Матвей\assets\img\Bg.png"
+PIPE_PATH = r"C:\игра 9А Яковлев Матвей\assets\img\pipe_bottom.png"
 SCORE_SOUND_PATH = r"C:\игра 9А Яковлев Матвей\assets\score.wav"
-# Ссылка на трубу с прозрачным фоном
-PIPE_URL = "[attachment_0](attachment)"
 
 # --- Загрузка графики ---
+
 # 1. Птичка
 try:
     bird_surface = pygame.image.load(BIRD_PATH).convert_alpha()
     bird_surface = pygame.transform.scale(bird_surface, (40, 30))
-except FileNotFoundError:
+except:
     bird_surface = pygame.Surface((40, 30))
     bird_surface.fill((255, 255, 0))
-
 bird_rect = bird_surface.get_rect(center=(100, HEIGHT // 2))
 
 # 2. Фон
 try:
     bg_surface = pygame.image.load(BG_PATH).convert()
     bg_surface = pygame.transform.scale(bg_surface, (WIDTH, HEIGHT))
-except FileNotFoundError:
+except:
     bg_surface = pygame.Surface((WIDTH, HEIGHT))
     bg_surface.fill((135, 206, 235))
 
-# 3. Трубы (загружаем по ссылке)
+# 3. ТРУБЫ (Разрезаем одну картинку на две)
 try:
-    print("Загрузка трубы из интернета...")
-    req = urllib.request.Request(PIPE_URL, headers={'User-Agent': 'Mozilla/5.0'})
-    response = urllib.request.urlopen(req)
-    pipe_file = io.BytesIO(response.read())
+    full_pipe_image = pygame.image.load(PIPE_PATH).convert_alpha()
+    img_width = full_pipe_image.get_width()
+    img_height = full_pipe_image.get_height()
     
-    pipe_bottom_surface = pygame.image.load(pipe_file).convert_alpha()
-    pipe_bottom_surface = pygame.transform.scale(pipe_bottom_surface, (60, 450))
-    print("Труба успешно загружена!")
+    # Режем пополам по вертикали
+    # subsurface((x, y, ширина, высота))
+    pipe_top_surface = full_pipe_image.subsurface((0, 0, img_width, img_height // 2))
+    pipe_bottom_surface = full_pipe_image.subsurface((0, img_height // 2, img_width, img_height // 2))
+    
+    # Масштабируем до игровых размеров
+    pipe_top_surface = pygame.transform.scale(pipe_top_surface, (60, 400))
+    pipe_bottom_surface = pygame.transform.scale(pipe_bottom_surface, (60, 400))
 except Exception as e:
-    print(f"ВНИМАНИЕ: Не удалось загрузить трубу по ссылке: {e}")
-    pipe_bottom_surface = pygame.Surface((60, 450))
-    pipe_bottom_surface.fill((34, 139, 34))
+    print(f"Ошибка загрузки труб: {e}")
+    pipe_top_surface = pygame.Surface((60, 400)); pipe_top_surface.fill((34, 139, 34))
+    pipe_bottom_surface = pygame.Surface((60, 400)); pipe_bottom_surface.fill((34, 139, 34))
 
-# Переворачиваем картинку нижней трубы по вертикали, чтобы получить верхнюю
-pipe_top_surface = pygame.transform.flip(pipe_bottom_surface, False, True)
+# Звук
+try:
+    score_sound = pygame.mixer.Sound(SCORE_SOUND_PATH)
+except:
+    score_sound = None
 
+# --- Логика труб ---
 pipe_list = []
 SPAWNPIPE = pygame.USEREVENT
 pygame.time.set_timer(SPAWNPIPE, 1500)
 pipe_heights = [250, 300, 350, 400, 450]
 
-# --- Загрузка звука ---
-try:
-    score_sound = pygame.mixer.Sound(SCORE_SOUND_PATH)
-except FileNotFoundError:
-    score_sound = None
-
 def create_pipe():
     random_pipe_pos = random.choice(pipe_heights)
+    # Нижняя труба
     bottom_pipe = pipe_bottom_surface.get_rect(midtop=(WIDTH + 50, random_pipe_pos))
+    # Верхняя труба (с зазором 150 пикселей)
     top_pipe = pipe_top_surface.get_rect(midbottom=(WIDTH + 50, random_pipe_pos - 150))
     return bottom_pipe, top_pipe
 
@@ -92,9 +91,9 @@ def move_pipes(pipes):
 
 def draw_pipes(pipes):
     for pipe in pipes:
-        if pipe.bottom >= HEIGHT: 
+        if pipe.bottom >= HEIGHT: # Если нижняя часть трубы уходит в пол — это нижняя труба
             screen.blit(pipe_bottom_surface, pipe)
-        else: 
+        else:
             screen.blit(pipe_top_surface, pipe)
 
 def check_collision(pipes):
@@ -105,7 +104,7 @@ def check_collision(pipes):
         return False
     return True
 
-# --- Главный игровой цикл ---
+# --- Цикл игры ---
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -127,36 +126,34 @@ while True:
         if event.type == SPAWNPIPE and game_active:
             pipe_list.extend(create_pipe())
 
+    # Фон
     screen.blit(bg_surface, (0, 0))
 
     if game_active:
+        # Птичка
         bird_movement += gravity
         bird_rect.centery += int(bird_movement)
         screen.blit(bird_surface, bird_rect)
         
+        # Трубы
         pipe_list = move_pipes(pipe_list)
         draw_pipes(pipe_list)
         
         game_active = check_collision(pipe_list)
 
+        # Очки
         for pipe in pipe_list:
-            if pipe.bottom >= HEIGHT: 
+            if pipe.bottom >= HEIGHT: # Считаем по нижним трубам
                 if pipe.centerx - 3 < bird_rect.centerx <= pipe.centerx:
                     score += 1
-                    if score_sound:
-                        score_sound.play()
+                    if score_sound: score_sound.play()
         
-        score_text = game_font.render(f"{int(score)}", True, (255, 255, 255))
-        screen.blit(score_text, score_text.get_rect(center=(WIDTH // 2, 50)))
+        score_text = game_font.render(f"Счет: {int(score)}", True, (255, 255, 255))
+        screen.blit(score_text, (WIDTH // 2 - 40, 50))
     else:
-        game_over_text1 = game_font.render("FLAPPY BIRD", True, (255, 255, 0))
-        game_over_text2 = game_font.render("Нажми ПРОБЕЛ", True, (255, 255, 255))
-        screen.blit(game_over_text1, game_over_text1.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 30)))
-        screen.blit(game_over_text2, game_over_text2.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 20)))
-        
-        if score > 0:
-            score_res = game_font.render(f"Счет: {int(score)}", True, (255, 100, 100))
-            screen.blit(score_res, score_res.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 70)))
+        # Экран меню
+        msg = game_font.render("НАЖМИ ПРОБЕЛ", True, (255, 255, 255))
+        screen.blit(msg, msg.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
 
     pygame.display.update()
     clock.tick(120)
