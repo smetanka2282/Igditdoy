@@ -17,27 +17,15 @@ GREEN = (50, 255, 50)
 RED = (255, 60, 60)
 PURPLE = (180, 50, 255)
 
-# ДИЗАЙН УРОВНЯ (В 3 раза длиннее, плавная сложность)
-# 0 - пусто (шаг 200 пикселей)
-# 1 - одиночный шип
-# 2 - двойной шип
-# 3 - блок (платформа)
-# 4 - блок с шипом сверху
-# 5 - подвешенный шип (сверху)
-# 6 - ПОРТАЛ САМОЛЁТИКА (переключает режим)
-# 7 - барьер снизу (для самолётика)
-# 8 - барьер сверху (для самолётика)
-
+# ДИЗАЙН УРОВНЯ
 LEVEL_DESIGN = [
-    # --- ЧАСТЬ 1: КУБ (Разминка и блоки) ---
+    # --- ЧАСТЬ 1: КУБ ---
     0, 1, 0, 3, 3, 0, 1, 0, 2, 0, 3, 4, 3, 0, 1, 0, 3, 3, 3, 0, 2, 0,
-    
     # --- ПЕРЕХОД: ПОРТАЛ ---
     6, 0, 0, 
-    
-    # --- ЧАСТЬ 2: САМОЛЁТИК (Полёты между препятствиями) ---
+    # --- ЧАСТЬ 2: САМОЛЁТИК ---
     7, 8, 0, 5, 0, 7, 0, 5, 8, 0, 7, 8, 0, 5, 0, 3, 3, 0, 5, 7, 0,
-    7, 8, 5, 0, 3, 0, 7, 0, 5, 0, 8, 0, 2, 0, 0, 0 # Финиш
+    7, 8, 5, 0, 3, 0, 7, 0, 5, 0, 8, 0, 2, 0, 0, 0 
 ]
 
 class Obstacle:
@@ -47,51 +35,44 @@ class Obstacle:
         self.width = 50
         self.height = 50
         
-        if type in [3, 4]: # Блоки на земле
+        if type in [3, 4]: 
             self.rect = pygame.Rect(self.x, GROUND_Y - self.height, self.width, self.height)
-        elif type == 5: # Подвешенный шип под потолком
+        elif type == 5: 
             self.rect = pygame.Rect(self.x, CEILING_Y, self.width, self.height)
-        elif type == 6: # Портал самолётика (высокий)
+        elif type == 6: 
             self.width = 40
             self.height = 120
             self.rect = pygame.Rect(self.x, GROUND_Y - self.height, self.width, self.height)
-        elif type == 7: # Нижний барьер для самолётика
+        elif type == 7: 
             self.height = 80
             self.rect = pygame.Rect(self.x, GROUND_Y - self.height, self.width, self.height)
-        elif type == 8: # Верхний барьер для самолётика
+        elif type == 8: 
             self.height = 80
             self.rect = pygame.Rect(self.x, CEILING_Y, self.width, self.height)
-        else: # Обычные шипы на земле
+        else: 
             self.rect = pygame.Rect(self.x, GROUND_Y - self.height, self.width, self.height)
 
     def draw(self, screen):
-        if self.type == 1: # Одиночный шип
+        if self.type == 1: 
             pygame.draw.polygon(screen, RED, [(self.rect.left, self.rect.bottom), (self.rect.centerx, self.rect.top), (self.rect.right, self.rect.bottom)])
-        
-        elif self.type == 2: # Двойной шип
+        elif self.type == 2: 
             for i in range(2):
                 x_off = i * 40
                 pygame.draw.polygon(screen, RED, [(self.rect.left + x_off, self.rect.bottom), (self.rect.centerx + x_off, self.rect.top), (self.rect.right + x_off, self.rect.bottom)])
-        
-        elif self.type == 3: # Обычный блок
+        elif self.type == 3: 
             pygame.draw.rect(screen, GRAY, self.rect)
             pygame.draw.rect(screen, WHITE, self.rect, 2)
-        
-        elif self.type == 4: # Блок с шипом
+        elif self.type == 4: 
             pygame.draw.rect(screen, GRAY, self.rect)
             pygame.draw.rect(screen, WHITE, self.rect, 2)
             pygame.draw.polygon(screen, RED, [(self.rect.left, self.rect.top), (self.rect.centerx, self.rect.top - 35), (self.rect.right, self.rect.top)])
-        
-        elif self.type == 5: # Подвешенный шип (смотрит вниз)
+        elif self.type == 5: 
             pygame.draw.polygon(screen, RED, [(self.rect.left, self.rect.top), (self.rect.centerx, self.rect.bottom), (self.rect.right, self.rect.top)])
-            
-        elif self.type == 6: # Портал самолётика
+        elif self.type == 6: 
             pygame.draw.rect(screen, PURPLE, self.rect, border_radius=10)
             pygame.draw.rect(screen, WHITE, self.rect, 3, border_radius=10)
-            # Светящаяся полоска внутри портала
             pygame.draw.line(screen, CYAN, (self.rect.centerx, self.rect.top + 10), (self.rect.centerx, self.rect.bottom - 10), 4)
-
-        elif self.type in [7, 8]: # Барьеры (блоки) для режима полета
+        elif self.type in [7, 8]: 
             pygame.draw.rect(screen, GRAY, self.rect)
             pygame.draw.rect(screen, LIGHT_GRAY, self.rect, 2)
 
@@ -102,11 +83,15 @@ class Player:
         self.gravity = 0.85
         self.angle = 0
         self.on_ground = True
-        self.mode = "CUBE" # Режимы: CUBE или SHIP
+        self.mode = "CUBE" 
+
+    def jump(self):
+        if self.mode == "CUBE" and self.on_ground:
+            self.vel_y = -15
+            self.on_ground = False
 
     def update(self, obstacles, keys_pressed):
         if self.mode == "CUBE":
-            # Физика обычного КУБА
             self.vel_y += self.gravity
             self.rect.y += self.vel_y
             
@@ -119,7 +104,6 @@ class Player:
                 self.on_ground = False
                 self.angle -= 6
                 
-            # Проверка платформ
             for obs in obstacles:
                 if obs.type in [3, 4]:
                     if self.rect.colliderect(obs.rect):
@@ -130,23 +114,18 @@ class Player:
                             self.angle = (self.angle // 90) * 90
                         elif self.rect.right > obs.rect.left + 5 and self.rect.left < obs.rect.right - 5:
                             if self.rect.top < obs.rect.bottom and self.rect.bottom > obs.rect.top:
-                                return True # Смерть от удара в стену куба
+                                return True 
                                 
         elif self.mode == "SHIP":
-            # Физика САМОЛЁТИКА (Удержание клавиши)
             if keys_pressed[pygame.K_SPACE] or keys_pressed[pygame.K_UP]:
-                self.vel_y -= 0.6  # Тяга вверх
+                self.vel_y -= 0.6  
             else:
-                self.vel_y += 0.45  # Падение вниз (плавное)
+                self.vel_y += 0.45  
                 
-            # Ограничение скорости полета
             self.vel_y = max(-6, min(6, self.vel_y))
             self.rect.y += self.vel_y
-            
-            # Наклон самолётика в зависимости от скорости
             self.angle = -self.vel_y * 4
             
-            # Ограничения экрана для самолётика (пол и потолок)
             if self.rect.bottom > GROUND_Y:
                 self.rect.bottom = GROUND_Y
                 self.vel_y = 0
@@ -159,6 +138,7 @@ class Player:
 def main():
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Geometry Dash - Fixed 9A")
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("Arial", 22, bold=True)
     
@@ -173,12 +153,9 @@ def main():
         nonlocal player, obstacles, level_width, progress_x, state
         player = Player()
         obstacles = []
-        
-        # Шаг спавна объектов — 200 пикселей
         for i, obs_type in enumerate(LEVEL_DESIGN):
             if obs_type != 0:
                 obstacles.append(Obstacle(WIDTH + i * 200, obs_type))
-        
         level_width = WIDTH + len(LEVEL_DESIGN) * 200
         progress_x = 0
         state = "PLAY"
@@ -186,6 +163,8 @@ def main():
     while True:
         screen.fill(BLACK)
         mouse_pos = pygame.mouse.get_pos()
+        
+        # Получаем состояние клавиш только внутри цикла
         keys_pressed = pygame.key.get_pressed()
         
         for event in pygame.event.get():
@@ -202,17 +181,19 @@ def main():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     state = "MENU"
+                
+                # Защита от краша: прыгаем только если идет игра и объект игрока существует
                 if event.key == pygame.K_SPACE or event.key == pygame.K_UP:
-                    if state == "PLAY" and player.mode == "CUBE":
+                    if state == "PLAY" and player is not None:
                         player.jump()
                     elif state in ["GAMEOVER", "WIN"]:
                         state = "MENU"
 
+        # --- РЕНДЕР И ЛОГИКА СОСТОЯНИЙ ---
         if state == "MENU":
             title = font.render("GEOMETRY DASH: CUBE & SHIP LEVEL", True, WHITE)
             screen.blit(title, (WIDTH//2 - 190, 120))
             
-            # Кнопка старта
             start_btn = pygame.Rect(WIDTH//2 - 150, HEIGHT//2 - 40, 300, 80)
             btn_color = GREEN if start_btn.collidepoint(mouse_pos) else GRAY
             pygame.draw.rect(screen, btn_color, start_btn, border_radius=15)
@@ -221,8 +202,7 @@ def main():
             txt = font.render("START LONG LEVEL", True, WHITE)
             screen.blit(txt, (start_btn.x + 50, start_btn.y + 25))
 
-        elif state == "PLAY":
-            # Отрисовка линий пола и потолка (потолок подсвечивается в режиме самолетика)
+        elif state == "PLAY" and player is not None:
             pygame.draw.rect(screen, GRAY, (0, GROUND_Y, WIDTH, HEIGHT - GROUND_Y))
             pygame.draw.line(screen, WHITE, (0, GROUND_Y), (WIDTH, GROUND_Y), 3)
             
@@ -233,7 +213,6 @@ def main():
             progress_x += speed
             active_obstacles = []
             
-            # Обработка и отрисовка объектов
             for obs in obstacles:
                 obs_x = obs.x - progress_x
                 obs.rect.x = obs_x
@@ -242,44 +221,36 @@ def main():
                     obs.draw(screen)
                     active_obstacles.append(obs)
                     
-                    # Проверка коллизий с шипами/барьерами
                     if obs.type in [1, 2, 5, 7, 8]:
                         if player.rect.colliderect(obs.rect):
                             state = "GAMEOVER"
-                    elif obs.type == 4: # Шип на блоке
+                    elif obs.type == 4: 
                         spike_rect = pygame.Rect(obs.rect.x, obs.rect.y - 35, obs.rect.width, 35)
                         if player.rect.colliderect(spike_rect):
                             state = "GAMEOVER"
-                    
-                    # ВХОД В ПОРТАЛ САМОЛЁТИКА
                     elif obs.type == 6:
                         if player.rect.colliderect(obs.rect) and player.mode == "CUBE":
                             player.mode = "SHIP"
                             player.vel_y = 0
 
-            # Обновление физики игрока (с передачей нажатых клавиш для самолетика)
             crashed = player.update(active_obstacles, keys_pressed)
             if crashed:
                 state = "GAMEOVER"
 
-            # Отрисовка скина (Куб или Самолётик)
             p_surf = pygame.Surface((40, 40), pygame.SRCALPHA)
             if player.mode == "CUBE":
                 pygame.draw.rect(p_surf, CYAN, (0, 0, 40, 40))
                 pygame.draw.rect(p_surf, WHITE, (0, 0, 40, 40), 2)
-            else: # Отрисовка модельки самолетика (упрощенная)
+            else: 
                 pygame.draw.polygon(p_surf, GREEN, [(5, 30), (35, 20), (5, 10)])
-                pygame.draw.rect(p_surf, CYAN, (10, 15, 12, 10)) # Кабина
-                pygame.draw.rect(p_surf, WHITE, (0, 0, 40, 40), 1) # Границы для теста
+                pygame.draw.rect(p_surf, CYAN, (10, 15, 12, 10)) 
                 
             rot_p = pygame.transform.rotate(p_surf, player.angle)
             screen.blit(rot_p, rot_p.get_rect(center=player.rect.center))
 
-            # Условие победы
             if progress_x > level_width:
                 state = "WIN"
 
-            # Вывод режима на экран
             mode_text = font.render(f"MODE: {player.mode}", True, LIGHT_GRAY)
             screen.blit(mode_text, (20, 20))
 
@@ -295,8 +266,6 @@ def main():
 
         pygame.display.flip()
         clock.tick(FPS)
-
-    pygame.quit()
 
 if __name__ == "__main__":
     main()
