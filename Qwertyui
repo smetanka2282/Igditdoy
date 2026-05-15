@@ -17,15 +17,15 @@ GREEN = (50, 255, 50)
 RED = (255, 60, 60)
 PURPLE = (180, 50, 255)
 
-# ДИЗАЙН УРОВНЯ
+# ДИЗАЙН УРОВНЯ (Сделан чуть легче, меньше завалов)
 LEVEL_DESIGN = [
     # --- ЧАСТЬ 1: КУБ ---
-    0, 1, 0, 3, 3, 0, 1, 0, 2, 0, 3, 4, 3, 0, 1, 0, 3, 3, 3, 0, 2, 0,
+    0, 1, 0, 3, 0, 1, 0, 3, 3, 0, 1, 0, 3, 4, 0, 1, 0, 3, 3, 0, 1, 0,
     # --- ПЕРЕХОД: ПОРТАЛ ---
     6, 0, 0, 
     # --- ЧАСТЬ 2: САМОЛЁТИК ---
-    7, 8, 0, 5, 0, 7, 0, 5, 8, 0, 7, 8, 0, 5, 0, 3, 3, 0, 5, 7, 0,
-    7, 8, 5, 0, 3, 0, 7, 0, 5, 0, 8, 0, 2, 0, 0, 0 
+    7, 8, 0, 5, 0, 7, 0, 5, 0, 7, 8, 0, 5, 0, 3, 3, 0, 5, 0, 0,
+    7, 8, 0, 0, 3, 0, 7, 0, 5, 0, 8, 0, 1, 0, 0, 0 
 ]
 
 class Obstacle:
@@ -44,10 +44,10 @@ class Obstacle:
             self.height = 120
             self.rect = pygame.Rect(self.x, GROUND_Y - self.height, self.width, self.height)
         elif type == 7: 
-            self.height = 80
+            self.height = 60  # Сделано ниже (было 80), пролетать теперь легче
             self.rect = pygame.Rect(self.x, GROUND_Y - self.height, self.width, self.height)
         elif type == 8: 
-            self.height = 80
+            self.height = 60  # Сделано ниже (было 80)
             self.rect = pygame.Rect(self.x, CEILING_Y, self.width, self.height)
         else: 
             self.rect = pygame.Rect(self.x, GROUND_Y - self.height, self.width, self.height)
@@ -80,18 +80,24 @@ class Player:
     def __init__(self):
         self.rect = pygame.Rect(150, GROUND_Y - 40, 40, 40)
         self.vel_y = 0
-        self.gravity = 0.85
+        self.gravity = 0.95  # Чуть тяжелее гравитация для более резкого приземления
         self.angle = 0
         self.on_ground = True
         self.mode = "CUBE" 
-
-    def jump(self):
-        if self.mode == "CUBE" and self.on_ground:
-            self.vel_y = -15
-            self.on_ground = False
+        self.space_released = True  # Флаг предохранителя одиночного нажатия для кубика
 
     def update(self, obstacles, keys_pressed):
         if self.mode == "CUBE":
+            # МГНОВЕННЫЙ ТОЧНЫЙ ПРЫЖОК
+            if keys_pressed[pygame.K_SPACE] or keys_pressed[pygame.K_UP]:
+                if self.on_ground and self.space_released:
+                    self.vel_y = -15.5  # Резкий сильный толчок
+                    self.on_ground = False
+                    self.space_released = False  # Пока держит пробел — второй раз не прыгнет
+            else:
+                self.space_released = True
+
+            # Физика падения
             self.vel_y += self.gravity
             self.rect.y += self.vel_y
             
@@ -102,11 +108,13 @@ class Player:
                 self.angle = (self.angle // 90) * 90
             else:
                 self.on_ground = False
-                self.angle -= 6
-                
+                self.angle -= 7  # Вращение чуть быстрее, под стать физике
+
+            # Проверка платформ
             for obs in obstacles:
                 if obs.type in [3, 4]:
                     if self.rect.colliderect(obs.rect):
+                        # Срабатывает четко на верхней грани блока
                         if self.vel_y > 0 and self.rect.bottom <= obs.rect.top + 15:
                             self.rect.bottom = obs.rect.top
                             self.vel_y = 0
@@ -118,11 +126,11 @@ class Player:
                                 
         elif self.mode == "SHIP":
             if keys_pressed[pygame.K_SPACE] or keys_pressed[pygame.K_UP]:
-                self.vel_y -= 0.6  
+                self.vel_y -= 0.65  
             else:
-                self.vel_y += 0.45  
+                self.vel_y += 0.5  
                 
-            self.vel_y = max(-6, min(6, self.vel_y))
+            self.vel_y = max(-6.5, min(6.5, self.vel_y))
             self.rect.y += self.vel_y
             self.angle = -self.vel_y * 4
             
@@ -138,7 +146,7 @@ class Player:
 def main():
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Geometry Dash - Fixed 9A")
+    pygame.display.set_caption("Geometry Dash - Precise Jump Edition")
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("Arial", 22, bold=True)
     
@@ -147,7 +155,7 @@ def main():
     obstacles = []
     level_width = 0
     progress_x = 0
-    speed = 7.5
+    speed = 6.5  # Скорость снижена с 7.5 до 6.5 для облегчения игры
 
     def start_level():
         nonlocal player, obstacles, level_width, progress_x, state
@@ -155,8 +163,8 @@ def main():
         obstacles = []
         for i, obs_type in enumerate(LEVEL_DESIGN):
             if obs_type != 0:
-                obstacles.append(Obstacle(WIDTH + i * 200, obs_type))
-        level_width = WIDTH + len(LEVEL_DESIGN) * 200
+                obstacles.append(Obstacle(WIDTH + i * 210, obs_type))
+        level_width = WIDTH + len(LEVEL_DESIGN) * 210
         progress_x = 0
         state = "PLAY"
 
@@ -164,7 +172,7 @@ def main():
         screen.fill(BLACK)
         mouse_pos = pygame.mouse.get_pos()
         
-        # Получаем состояние клавиш только внутри цикла
+        # Получаем срез нажатых клавиш на аппаратном уровне (0 задержки)
         keys_pressed = pygame.key.get_pressed()
         
         for event in pygame.event.get():
@@ -181,26 +189,22 @@ def main():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     state = "MENU"
-                
-                # Защита от краша: прыгаем только если идет игра и объект игрока существует
                 if event.key == pygame.K_SPACE or event.key == pygame.K_UP:
-                    if state == "PLAY" and player is not None:
-                        player.jump()
-                    elif state in ["GAMEOVER", "WIN"]:
+                    if state in ["GAMEOVER", "WIN"]:
                         state = "MENU"
 
-        # --- РЕНДЕР И ЛОГИКА СОСТОЯНИЙ ---
+        # --- ОБНОВЛЕНИЕ И ОТРИСОВКА ---
         if state == "MENU":
-            title = font.render("GEOMETRY DASH: CUBE & SHIP LEVEL", True, WHITE)
-            screen.blit(title, (WIDTH//2 - 190, 120))
+            title = font.render("GEOMETRY DASH (Precise Controls)", True, WHITE)
+            screen.blit(title, (WIDTH//2 - 170, 120))
             
             start_btn = pygame.Rect(WIDTH//2 - 150, HEIGHT//2 - 40, 300, 80)
             btn_color = GREEN if start_btn.collidepoint(mouse_pos) else GRAY
             pygame.draw.rect(screen, btn_color, start_btn, border_radius=15)
             pygame.draw.rect(screen, WHITE, start_btn, 3, border_radius=15)
             
-            txt = font.render("START LONG LEVEL", True, WHITE)
-            screen.blit(txt, (start_btn.x + 50, start_btn.y + 25))
+            txt = font.render("START EASY-MID LEVEL", True, WHITE)
+            screen.blit(txt, (start_btn.x + 35, start_btn.y + 25))
 
         elif state == "PLAY" and player is not None:
             pygame.draw.rect(screen, GRAY, (0, GROUND_Y, WIDTH, HEIGHT - GROUND_Y))
@@ -233,6 +237,7 @@ def main():
                             player.mode = "SHIP"
                             player.vel_y = 0
 
+            # Аппаратный опрос клавиш передается в метод
             crashed = player.update(active_obstacles, keys_pressed)
             if crashed:
                 state = "GAMEOVER"
@@ -261,11 +266,13 @@ def main():
 
         elif state == "WIN":
             pygame.draw.rect(screen, BLACK, (WIDTH//2 - 250, HEIGHT//2 - 60, 500, 120), border_radius=10)
-            msg = font.render("YOU BEAT THE CUBE & SHIP LEVEL!", True, CYAN)
-            screen.blit(msg, (WIDTH//2 - 190, HEIGHT//2 - 15))
+            msg = font.render("LEVEL COMPLETE! YOU WIN!", True, CYAN)
+            screen.blit(msg, (WIDTH//2 - 160, HEIGHT//2 - 15))
 
         pygame.display.flip()
         clock.tick(FPS)
+
+    pygame.quit()
 
 if __name__ == "__main__":
     main()
